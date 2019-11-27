@@ -9,98 +9,178 @@ import time
 #                                                   #
 #####################################################
 
-Length = 8
+box_size = 8
 displacement = 1.5
-Number = 20    #number of atoms
+Natoms = 20    #Natoms of atoms
 Cutoff = 2.5   #cut off
-dump_every = 1000   
-log_every = 100  
-thermostat_every=100
-h = 0.00001
-desired_Temperature = 160 #K
-kBTrue = 1.38064852e-23  #m2 kg s-2 K-1
-epsilon_True = 1.65e-21 #J
-sigma_True = 3.4e-10    #m
+dump_step = 1000   
+log_step = 100  
+dt = 0.00001
+temp_ref = 160 #K
+temp_step = 100 # ever 100th step
+kB_true = 1.38064852e-23  #m2 kg s-2 K-1
+epsilon_true = 1.65e-21 #J
+sigma_true = 3.4e-10    #m
+random_seed = 8
+
+
+np.random.seed = random_seed
 
  #  kB         1 
  #  epsilon    1
  #  sigma      1
 
-def gasdev(idum):
-	pass
-
-def Thermostat_velocity_rescaling(V):
-	pass
-
-def Force(X,F):
-	pass
-
-Force = np.zeros((Number,3,2)) # why a tensor?
-KEnergy = np.zeros((Number,2))
-PEnergy = np.zeros((Number,2))
-
-# what are these?
-X = np.zeros((Number,2))
-V = np.zeros((Number,2))
-F = np.zeros((Number,2))
 
 
+def pbc(X):
+	X -= box_size*np.floor(X/box_size)
+	# X[:,0] -= box_size*np.floor(X[:,0]/box_size)
+	# X[:,1] -= box_size*np.floor(X[:,1]/box_size)
+	return X
 
-# whow does this work?
-X_cm, Y_cm = 0,0
-T = 100000
-k = np.sqrt(Number/2)+1  
-m = displacement
-N = Number
-for j in range(Number/k + 1):
-	for i in range(k+1):
-		if N!=0:
-			X[Number-N,0] = i*m
-			X[Number-N,1] = (j+1)*m
-			X_cm += X[Number-N,0]/Number
-			Y_cm += X[Number-N,1]/Number
-			N -= 1
+# needs refactoring
+def force(X,F):
+	F[:,:] = 0
 
-# move CM to the center of the box
-X[:,0] += Length/2-X_cm
-X[:,1] += Length/2-Y_cm
+	# this loop can be vectorized --see numpy documentation
+	for i in range(Natoms):
+		for j in range(i,Natoms):
+			#what is this?
+			solid_distance_x = np.abs(X[i,0]-X[j,0])
+			solid_distance_y = np.abs(Y[i,1]-X[j,1])
+			delta_x = -solid_distance_x + box_size * np.floor(solid_distance_x/(box_size/2))
+			delta_y = -solid_distance_y + box_size * np.floor(solid_distance_y/(box_size/2))
+			r2 = delta_x**2 + delta_y**2
 
-# dump....?
+			# what is this
+			if np.sqrt(r2)<cutoff:
+				if X[i,0]<X[j,0]:
+					F[i,0] += delta_x*48*(1/r2**7) - 1/(2*r2**4)
+				else:
+					F[i,0] += -delta_x*48*(1/r2**7) - 1/(2*r2**4)
+				if X[i,1]<X[j,1]:
+					F[i,1] += delta_y*48*(1/r2**7) - 1/(2*r2**4)
+				else:
+					F[i,1] += -delta_y*48*(1/r2**7) - 1/(2*r2**4)
 
-# what is this?
-V[:,0] = gasdev(idum)
-V[:,1] = gasdev(idum)
+	F = -F.T + F + F[np.diag_indices_from(F)]
+	return F
 
-# calculate CM velocity
-XMassVelocity, YMassVelocity = 0,0
-XMassVelocity += V[:,0]
-YMassVelocity += V[:,1]
 
-# set CM velocity to zero
-V[:][0] -= XMassVelocity/Number
-V[:][1] -= YMassVelocity/Number
+def potential_energy(X):
+	for i in range(Natoms):
+		for j in range(i,Natoms):
+			if np.abs(X[i,0]-X[j,0]) > box_size/2:
+				delta_x = box_size - np.abs(X[i,0]-X[j,0])		
+			else:
+				delta_x = np.abs(X[i,0]-X[j,0])
 
-Thermostat_velocity_rescaling(V)
+			if np.abs(X[i,1]-X[j,1]) > box_size/2:
+				delta_y = box_size - np.abs(X[i,1]-X[j,1])
+			else:
+				delta_y = np.abs(X[i,1]-X[j,1])
+			r = np.sqrt(delta_x**2 + delta_y**2)
+			if r<cutoff:
+				E += 4 * ( r**-12 - r**-6)
 
-# calculate a0 ? acceleration?
-Force(X,F)
+# removed bcs Uji =0
+#	E *= .5 # because Uij=Uji
+	return E
 
-# MAIN
+def kinetic_energy(V):
+	E = np.zeros((Natoms,2))
+	# is this ok?
+	E = .5*(V[:,0]**2) + V[:,1]**2
+	return E
 
-# clock() ???
-# t_start = time.time()
+def temperature(V)
+	#is this ok
+    return kinetic_energy(V) * 2/(3*Natoms)
+
+def thermostat_velocity_rescaling(V):
+	temp_true = epsilon_true/kB_true
+	temp_now = 
+
+
+#Forces = np.zeros((Natoms,3,2)) # why a tensor?
+# KEnergy = np.zeros((Natoms,2))
+# PEnergy = np.zeros((Natoms,2))
+
+def main():
+	# what are these?
+	X = np.zeros((Natoms,2))
+	V = np.zeros((Natoms,2))
+	F = np.zeros((Natoms,2))
+
+
+
+	# how does this work?
+	X_cm, Y_cm = 0,0
+
+	k = np.sqrt(Natoms/2)+1  
+	m = displacement
+	N = Natoms
+	for j in range(Natoms/k + 1):
+		for i in range(k+1):
+			# strange loop...
+			if N!=0:
+				X[Natoms-N,0] = i*m
+				X[Natoms-N,1] = (j+1)*m
+				X_cm += X[Natoms-N,0]/Natoms
+				Y_cm += X[Natoms-N,1]/Natoms
+				N -= 1
+
+	# move CM to the center of the box
+	X[:,0] += box_size/2-X_cm
+	X[:,1] += box_size/2-Y_cm
+
+	# dump....?
+
+	# what is this? random numbers?
+	V[:,0] = np.random.randn()
+	V[:,1] = np.random.randn()
+
+	# calculate CM velocity
+	XMassVelocity, YMassVelocity = 0,0
+	XMassVelocity += V[:,0]
+	YMassVelocity += V[:,1]
+
+	# set CM velocity to zero
+	V[:][0] -= XMassVelocity/Natoms
+	V[:][1] -= YMassVelocity/Natoms
+
+	thermostat_velocity_rescaling(V)
+
+	# calculate a0 ? acceleration?
+	Forces = force(X,F)
+
+	# MAIN
+
+	t_start = time.time()
+	T = 100000
+	for step in range(T):
+		time_integration_verlet(V,X,F,step)
+		dump(X,step,"M.log")
+		log(X,V,step,"energy.log")
+		if step%temp_coupling_step==0:
+			thermostat_velocity_rescaling(V)
+	t_end = time.time()
+	print("Time taken: {:.2f} seconds\n".format(t_end-t_start))
+
+	return None
 
 class MD(object):
 	def __init__(self):
-		self.BoxSize = 8 # unitless 2D box length
+		self.box_size = 8 # unitless 2D box length
 		self.displacement = 1.5
-		self.Natoms = 20    #number of atoms
-		self.Cutoff = 2.5   #cut off
-		self.dump_every = 1000   
-		self.log_every = 100  
-		self.thermostat_every=100
+		self.Natoms = 20    #Natoms of atoms
+		self.cutoff = 2.5   #cut off
+		self.dump_step = 1000   
+		self.log_step = 100  
+		self.thermostat_step=100
 		self.dt = 0.00001 # discretization
-		self.desired_Temperature = 160 #K
+		self.temp_ref = 160 #K
+		self.temp_step = 160 #K
 		
 
 		#constants
@@ -109,5 +189,9 @@ class MD(object):
 		sigma_True = 3.4e-10    #m
 
 
-def main():
-	pass
+# def main():
+# 	#MD()
+# 	pass
+
+if __name__ == '__main__':
+	main()

@@ -127,7 +127,7 @@ void Force(float X[][2],float F[][2]){             //calculate acceleration
     }
 	for(i=0;i<Number;i++){
 	    for(j=0;j<Number;j++){
-                if(j!=i){
+                if(j!=i){ //this IF is unnecessary instead set i>j in the loop
                     
                     solid_distanse_x = abs(X[i][0]-X[j][0]);
                     deltax = -solid_distanse_x + Length*floor(float(solid_distanse_x/Length_2));   
@@ -263,7 +263,7 @@ float PEnergy(float X[][2]){             //calculate potential Energy
     int j,i;
     for(i=0;i<Number;i++){
         for(j=0;j<Number;j++){
-             if(j!=i){
+             if(j!=i){ // this IF is unnecessary use j=i instead
              	if(abs(X[i][0]-X[j][0])>Length/2){
             	  deltax=Length-abs(X[i][0]-X[j][0]);
 				}
