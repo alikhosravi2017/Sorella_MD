@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 import numpy as np
 import time
-
+import os
 #####################################################
 #                                                   #
 #              Preliminary code                     #
@@ -11,7 +11,7 @@ import time
 
 box_size = 8
 displacement = 1.5
-Natoms = 20    #Natoms of atoms
+Natoms = 3    #Natoms of atoms
 cutoff = 2.5   #cut off
 dump_step = 1000   
 log_step = 100  
@@ -26,7 +26,14 @@ trajectory_file = "traj.xyz"
 log_file = "output.log"
 
 
+# open files for writting
+os.remove(trajectory_file)
+os.remove(log_file)
+f = open(trajectory_file, "ab")
+f2 = open(log_file, "ab")
+
 np.random.seed = random_seed
+
 
  #  kB         1 
  #  epsilon    1
@@ -44,27 +51,30 @@ def pbc(X):
 def force(X,F):
 	F[:,:] = 0
 
+	box_half_size = box_size/2
 	# this loop can be vectorized --see numpy documentation
 	for i in range(Natoms):
-		for j in range(i,Natoms):
+		for j in range(Natoms):
+			# vectorize this
+			if j!=i:
 			#what is this?
-			solid_distance_x = np.abs(X[i,0]-X[j,0])
-			solid_distance_y = np.abs(X[i,1]-X[j,1])
-			delta_x = -solid_distance_x + box_size * np.floor(solid_distance_x/(box_size/2))
-			delta_y = -solid_distance_y + box_size * np.floor(solid_distance_y/(box_size/2))
-			r2 = delta_x**2 + delta_y**2
-
-			# what is this
-			if np.sqrt(r2)<cutoff:
-				if X[i,0]<X[j,0]:
-					F[i,0] += delta_x*48*(1/r2**7) - 1/(2*r2**4)
-				else:
-					F[i,0] += -delta_x*48*(1/r2**7) - 1/(2*r2**4)
-				if X[i,1]<X[j,1]:
-					F[i,1] += delta_y*48*(1/r2**7) - 1/(2*r2**4)
-				else:
-					F[i,1] += -delta_y*48*(1/r2**7) - 1/(2*r2**4)
-
+				solid_distance_x = np.abs(X[i,0]-X[j,0])
+				solid_distance_y = np.abs(X[i,1]-X[j,1])
+				delta_x = -solid_distance_x + box_size * np.floor(solid_distance_x/box_half_size)
+				delta_y = -solid_distance_y + box_size * np.floor(solid_distance_y/box_half_size)
+				r2 = delta_x**2 + delta_y**2
+		
+				# what is this
+				if np.sqrt(r2)<cutoff:
+					if X[i,0]<X[j,0]:
+						F[i,0] += delta_x*48*(1/r2**7) - 1/(2*r2**4)
+					else:
+						F[i,0] += -delta_x*48*(1/r2**7) - 1/(2*r2**4)
+					if X[i,1]<X[j,1]:
+						F[i,1] += delta_y*48*(1/r2**7) - 1/(2*r2**4)
+					else:
+						F[i,1] += -delta_y*48*(1/r2**7) - 1/(2*r2**4)
+		
 	# F = -F.T + F + F[np.diag_indices_from(F)]
 
 	return F
@@ -73,7 +83,7 @@ def force(X,F):
 def potential_energy(X):
 	E = 0
 	for i in range(Natoms):
-		for j in range(i,Natoms):
+		for j in range(i+1,Natoms):
 			if np.abs(X[i,0]-X[j,0]) > box_size/2:
 				delta_x = box_size - np.abs(X[i,0]-X[j,0])		
 			else:
@@ -86,9 +96,23 @@ def potential_energy(X):
 			r = np.sqrt(delta_x**2 + delta_y**2)
 			if r<cutoff:
 				E += 4 * ( r**-12 - r**-6)
-
+	# for i in range(Natoms):
+	# 	for j in range(Natoms):
+	# 		if j!=i:
+	# 			if np.abs(X[i,0]-X[j,0]) > box_size/2:
+	# 				delta_x = box_size - np.abs(X[i,0]-X[j,0])		
+	# 			else:
+	# 				delta_x = np.abs(X[i,0]-X[j,0])
+	
+	# 			if np.abs(X[i,1]-X[j,1]) > box_size/2:
+	# 				delta_y = box_size - np.abs(X[i,1]-X[j,1])
+	# 			else:
+	# 				delta_y = np.abs(X[i,1]-X[j,1])
+	# 			r = np.sqrt(delta_x**2 + delta_y**2)
+	# 			if r<cutoff:
+	# 				E += 4 * ( r**-12 - r**-6)
 # removed bcs Uji =0
-#	E *= .5 # because Uij=Uji
+	# E *= .5 # because Uij=Uji
 	return E
 
 def kinetic_energy(V):
@@ -96,6 +120,8 @@ def kinetic_energy(V):
 	E = 0
 	# is this ok?
 	E = .5*(np.sum(V[:,0]**2) + np.sum(V[:,1]**2))
+	# print(V)
+	# print(np.sum(V[:,0]**2))
 	return E
 
 def temperature(V):
@@ -105,36 +131,41 @@ def temperature(V):
 def thermostat_velocity_rescaling(V):
 	temp_true = epsilon_true/kB_true # converts to K
 	temp_now = temperature(V)*temp_true
+	# print(temp_now,temp_true)
 	lambda_ = np.sqrt(temp_ref/temp_now)
 	V[:,0] *= lambda_
 	V[:,1] *= lambda_
 	return V
 
-def velocity_verlet(V,X,F):
+def velocity_verlet(V,X,F_0):
 	#verlet loop
-	V[:,0] += dt*F[:,0]
-	V[:,1] += dt*F[:,1]
-	X[:,0] += dt*V[:,0]
-	X[:,1] += dt*V[:,1]
+	# V[:,0] += dt/2*F[:,0]
+	# V[:,1] += dt/2*F[:,1]
+	# X[:,0] += dt*V[:,0]
+	# X[:,1] += dt*V[:,1]
+	V += dt/2 * F_0
+	X += dt*V
 	X = pbc(X)
 
 	# calculate accelerations
-	F = force(X,F) 
+	F_1 = np.array(force(X,F_0))
 	# calculate velocities at halfstep
-	V[:,0] += dt/2 * F[:,0]
-	V[:,1] += dt/2 * F[:,1]
-	return V,X
+	# V[:,0] += dt/2 * F[:,0]
+	# V[:,1] += dt/2 * F[:,1]
+	V += dt/2*F_1
+	F_0 = F_1
+	return V,X,F_0
 
 def dump_xyz(X,step,fname):
 	if step%dump_step!=0:
 		return None
 
-	atom_types = np.zeros(np.shape(X)[0])
-	xyz = [atom_types,X[:,0],X[:,1]]
-	with open(fname, "ab") as f:
-		f.write(str(Natoms).encode())
-		f.write(b"\n atoms")
-		np.savetxt(f, xyz)
+	atom_types = Natoms*[1]
+	xyz = np.array([atom_types,X[:,0],X[:,1],np.zeros(np.shape(X)[0])]).T
+
+	f.write(str(Natoms).encode())
+	f.write(b"\n atoms\n")
+	np.savetxt(f, xyz,fmt=('%i','%.8f','%.8f','%.8f'))
 	return None
 
 
@@ -149,8 +180,7 @@ def log(X,V,step,fname):
 	temp_now = temperature(V)*temp_true
 	log_output = [step,E_kin,E_pot,E_tot,temp_now]
 
-	with open(fname, "ab") as f:
-		np.savetxt(f, log_output)
+	np.savetxt(f2, log_output)
 	return None
 
 #Forces = np.zeros((Natoms,3,2)) # why a tensor?
@@ -158,6 +188,8 @@ def log(X,V,step,fname):
 # PEnergy = np.zeros((Natoms,2))
 
 def main():
+
+
 	# initialize positions, velocities and forces
 	X = np.zeros((Natoms,2))
 	V = np.zeros((Natoms,2))
@@ -189,19 +221,25 @@ def main():
 
 	dump_xyz(X,0,trajectory_file)
 
-	# what is this? random numbers?
+
 	V[:,0] = np.random.randn()
 	V[:,1] = np.random.randn()
 
+	print(V)
 	# calculate CM velocity
-	XMassVelocity, YMassVelocity = 0,0
-	XMassVelocity += V[:,0]
-	YMassVelocity += V[:,1]
+	# XMassVelocity, YMassVelocity = 0,0
+	XMassVelocity = np.sum(V[:,0])
+	YMassVelocity = np.sum(V[:,1])
 
 	# set CM velocity to zero
 	V[:,0] -= XMassVelocity/Natoms
 	V[:,1] -= YMassVelocity/Natoms
 
+
+	XMassVelocity = np.sum(V[:,0])
+	YMassVelocity = np.sum(V[:,1])
+
+	# print(XMassVelocity,YMassVelocity)
 	thermostat_velocity_rescaling(V)
 
 	# calculate a0 ? acceleration?
@@ -212,13 +250,17 @@ def main():
 	t_start = time.time()
 	T = 100000
 	for step in range(T):
-		V,X = velocity_verlet(V,X,F)
+		# print(V)
+		V,X,F = velocity_verlet(V,X,F)
 		dump_xyz(X,step,trajectory_file)
 		log(X,V,step,log_file)
 		if step%temp_step==0:
 			thermostat_velocity_rescaling(V)
 	t_end = time.time()
 	print("Time taken: {:.2f} seconds\n".format(t_end-t_start))
+
+	f.close()
+	f2.close()
 
 	return None
 
