@@ -22,6 +22,8 @@ kB_true = 1.38064852e-23  #m2 kg s-2 K-1
 epsilon_true = 1.65e-21 #J
 sigma_true = 3.4e-10    #m
 random_seed = 8
+trajectory_file = "traj.xyz"
+log_file = "output.log"
 
 
 np.random.seed = random_seed
@@ -41,7 +43,6 @@ def pbc(X):
 # needs refactoring
 def force(X,F):
 	F[:,:] = 0
-	return F
 
 	# this loop can be vectorized --see numpy documentation
 	for i in range(Natoms):
@@ -121,21 +122,31 @@ def velocity_verlet(V,X,F):
 	return V,X
 
 def dump_xyz(X,step,fname):
+	if step%dump_step!=0:
+		return None
+
+	atom_types = np.zeros(np.shape(X)[0])
+	xyz = [atom_types,X[:,0],X[:,1]]
 	with open(fname, "ab") as f:
-    	f.write(b"\n")
-    	np.savetxt(f, a)
+		f.write(Natoms)
+		f.write(b"\n atoms")
+    	np.savetxt(f, xyz)
 	return None
 
 
 def log(X,V,step,fname):
-	if step%log_step==0:
+	if step%log_step!=0:
 		return None
 
 	temp_true = epsilon_true/kB_true	
-	Ekin = KE
+	E_kin = kinetic_energy(V)*epsilon_true
+	E_pot = potential_energy(X)*epsilon_true
+	E_tot = E_kin+E_pot
+	temp_now = temperature(V)*temp_true
+	log_output = [step,E_kin,E_pot,E_tot,temp_now]
+
 	with open(fname, "ab") as f:
-    	f.write(b"\n")
-    	np.savetxt(f, a)
+    	np.savetxt(f, log_output)
 	return None
 
 #Forces = np.zeros((Natoms,3,2)) # why a tensor?
@@ -143,7 +154,7 @@ def log(X,V,step,fname):
 # PEnergy = np.zeros((Natoms,2))
 
 def main():
-	# what are these?
+	# initialize positions, velocities and forces
 	X = np.zeros((Natoms,2))
 	V = np.zeros((Natoms,2))
 	F = np.zeros((Natoms,2))
@@ -170,7 +181,7 @@ def main():
 	X[:,0] += box_size/2-X_cm
 	X[:,1] += box_size/2-Y_cm
 
-	# dump....?
+	dump_xyz(X,step,trajectory_file)
 
 	# what is this? random numbers?
 	V[:,0] = np.random.randn()
@@ -195,34 +206,34 @@ def main():
 	t_start = time.time()
 	T = 100000
 	for step in range(T):
-		V,X,F = velocity_verlet(V,X,F,step)
-		dump_xyz(X,step,"dump.xyz")
-		log(X,V,step,"energy.log")
-		if step%temp_coupling_step==0:
+		V,X = velocity_verlet(V,X,F,step)
+		dump_xyz(X,step,trajectory_file)
+		log(X,V,step,log_file)
+		if step%temp_step==0:
 			thermostat_velocity_rescaling(V)
 	t_end = time.time()
 	print("Time taken: {:.2f} seconds\n".format(t_end-t_start))
 
 	return None
 
-class MD(object):
-	def __init__(self):
-		self.box_size = 8 # unitless 2D box length
-		self.displacement = 1.5
-		self.Natoms = 20    #Natoms of atoms
-		self.cutoff = 2.5   #cut off
-		self.dump_step = 1000   
-		self.log_step = 100  
-		self.thermostat_step=100
-		self.dt = 0.00001 # discretization
-		self.temp_ref = 160 #K
-		self.temp_step = 160 #K
+# class MD(object):
+# 	def __init__(self):
+# 		self.box_size = 8 # unitless 2D box length
+# 		self.displacement = 1.5
+# 		self.Natoms = 20    #Natoms of atoms
+# 		self.cutoff = 2.5   #cut off
+# 		self.dump_step = 1000   
+# 		self.log_step = 100  
+# 		self.thermostat_step=100
+# 		self.dt = 0.00001 # discretization
+# 		self.temp_ref = 160 #K
+# 		self.temp_step = 160 #K
 		
 
-		#constants
-		kBTrue = 1.38064852e-23  #m2 kg s-2 K-1
-		epsilon_True = 1.65e-21 #J
-		sigma_True = 3.4e-10    #m
+# 		#constants
+# 		kBTrue = 1.38064852e-23  #m2 kg s-2 K-1
+# 		epsilon_True = 1.65e-21 #J
+# 		sigma_True = 3.4e-10    #m
 
 
 # def main():

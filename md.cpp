@@ -30,7 +30,7 @@ using namespace std;
 void Force(float [][2],float [][2]);
 float KEnergy(float [][2]);
 float PEnergy(float [][2]);
-void time_integration_verlet(float [][2],float [][2],float [][2], int);
+void velocity_verlet(float [][2],float [][2],float [][2], int);
 void dump(float [][2],int, ofstream& );
 void log(float[][2],float[][2],int, ofstream&);
 void pbc(float[][2], int);
@@ -93,7 +93,7 @@ int main(){
         /// MAIN ///
         clock_t tStart = clock();
         for(step=1;step<T;step+=1){
-            time_integration_verlet(V,X,F, step);
+            velocity_verlet(V,X,F, step);
             dump(X,step,M_output_file);
             log(X,V,step,E_output_file);
             if(step%thermostat_every==0)        Thermostat_velocity_scaling(V);
@@ -204,7 +204,7 @@ void Thermostat_velocity_scaling(float V[][2]){
     }
     }
 
-void time_integration_verlet(float V[][2], float X[][2], float F[][2], int step){
+void velocity_verlet(float V[][2], float X[][2], float F[][2], int step){
     	                                       
     // verlet loop //
     int i;
