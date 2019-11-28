@@ -12,7 +12,7 @@ import time
 box_size = 8
 displacement = 1.5
 Natoms = 20    #Natoms of atoms
-Cutoff = 2.5   #cut off
+cutoff = 2.5   #cut off
 dump_step = 1000   
 log_step = 100  
 dt = 0.00001
