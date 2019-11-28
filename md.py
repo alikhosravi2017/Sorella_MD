@@ -41,6 +41,7 @@ def pbc(X):
 # needs refactoring
 def force(X,F):
 	F[:,:] = 0
+	return F
 
 	# this loop can be vectorized --see numpy documentation
 	for i in range(Natoms):
@@ -98,9 +99,44 @@ def temperature(V)
     return kinetic_energy(V) * 2/(3*Natoms)
 
 def thermostat_velocity_rescaling(V):
-	temp_true = epsilon_true/kB_true
-	temp_now = 
+	temp_true = epsilon_true/kB_true # converts to K
+	temp_now = temperature(V)*temp_true
+	lambda_ = np.sqrt(temp_ref/temp_now)
+	V *= lambda_
+	return V
 
+def velocity_verlet(V,X,F):
+	#verlet loop
+	V[:,0] += dt*F[:,0]
+	V[:,1] += dt*F[:,1]
+	X[:,0] += dt*V[:,0]
+	X[:,1] += dt*V[:,1]
+	X = pbc(X)
+
+	# calculate accelerations
+	F = force(X,F) 
+	# calculate velocities at halfstep
+	V[:,0] += dt/2 * F[:,0]
+	V[:,1] += dt/2 * F[:,1]
+	return V,X
+
+def dump_xyz(X,step,fname):
+	with open(fname, "ab") as f:
+    	f.write(b"\n")
+    	np.savetxt(f, a)
+	return None
+
+
+def log(X,V,step,fname):
+	if step%log_step==0:
+		return None
+
+	temp_true = epsilon_true/kB_true	
+	Ekin = KE
+	with open(fname, "ab") as f:
+    	f.write(b"\n")
+    	np.savetxt(f, a)
+	return None
 
 #Forces = np.zeros((Natoms,3,2)) # why a tensor?
 # KEnergy = np.zeros((Natoms,2))
@@ -152,15 +188,15 @@ def main():
 	thermostat_velocity_rescaling(V)
 
 	# calculate a0 ? acceleration?
-	Forces = force(X,F)
+	F = force(X,F)
 
 	# MAIN
 
 	t_start = time.time()
 	T = 100000
 	for step in range(T):
-		time_integration_verlet(V,X,F,step)
-		dump(X,step,"M.log")
+		V,X,F = velocity_verlet(V,X,F,step)
+		dump_xyz(X,step,"dump.xyz")
 		log(X,V,step,"energy.log")
 		if step%temp_coupling_step==0:
 			thermostat_velocity_rescaling(V)

@@ -193,9 +193,9 @@ void Force(float X[][2],float F[][2]){             //calculate acceleration
 void Thermostat_velocity_scaling(float V[][2]){
     float lambda;
     int i;
-    float temrature_True = float(epsilon_True)/kB_True;  // multiply temperature with this value to take in Kelvin
+    float temperature_True = float(epsilon_True)/kB_True;  // multiply temperature with this value to take in Kelvin
 
-    float temperature_now =Temperature(V)*temrature_True;
+    float temperature_now =Temperature(V)*temperature_True;
 //     cout<<"temperature_now="<<temperature_now<<endl;
     lambda = sqrt(desired_Temperature/temperature_now);
     for(i=0;i<Number;i++){
