@@ -2,6 +2,7 @@
 import numpy as np
 import time
 import os
+import numba
 #####################################################
 #                                                   #
 #              Preliminary code                     #
@@ -11,7 +12,7 @@ import os
 
 box_size = 8
 displacement = 1.5
-Natoms = 3    #Natoms of atoms
+Natoms = 20    #Natoms of atoms
 cutoff = 2.5   #cut off
 dump_step = 1000   
 log_step = 100  
@@ -23,14 +24,14 @@ epsilon_true = 1.65e-21 #J
 sigma_true = 3.4e-10    #m
 random_seed = 8
 trajectory_file = "traj.xyz"
-log_file = "output.log"
+log_file = "output.dat"
 
 
 # open files for writting
 os.remove(trajectory_file)
 os.remove(log_file)
 f = open(trajectory_file, "ab")
-f2 = open(log_file, "ab")
+f2 = open(log_file, "a")
 
 np.random.seed = random_seed
 
@@ -80,6 +81,7 @@ def force(X,F):
 	return F
 
 # needs to be vectorized
+
 def potential_energy(X):
 	E = 0
 	for i in range(Natoms):
@@ -115,27 +117,27 @@ def potential_energy(X):
 	# E *= .5 # because Uij=Uji
 	return E
 
+
 def kinetic_energy(V):
 	#E = np.zeros((Natoms,2))
 	E = 0
 	# is this ok?
 	E = .5*(np.sum(V[:,0]**2) + np.sum(V[:,1]**2))
-	# print(V)
-	# print(np.sum(V[:,0]**2))
 	return E
+
 
 def temperature(V):
 	#is this ok
     return kinetic_energy(V) * 2/(3*Natoms)
 
+
 def thermostat_velocity_rescaling(V):
 	temp_true = epsilon_true/kB_true # converts to K
 	temp_now = temperature(V)*temp_true
-	# print(temp_now,temp_true)
 	lambda_ = np.sqrt(temp_ref/temp_now)
-	V[:,0] *= lambda_
-	V[:,1] *= lambda_
+	V *= lambda_
 	return V
+
 
 def velocity_verlet(V,X,F_0):
 	#verlet loop
@@ -168,7 +170,6 @@ def dump_xyz(X,step,fname):
 	np.savetxt(f, xyz,fmt=('%i','%.8f','%.8f','%.8f'))
 	return None
 
-
 def log(X,V,step,fname):
 	if step%log_step!=0:
 		return None
@@ -178,14 +179,17 @@ def log(X,V,step,fname):
 	E_pot = potential_energy(X)*epsilon_true
 	E_tot = E_kin+E_pot
 	temp_now = temperature(V)*temp_true
-	log_output = [step,E_kin,E_pot,E_tot,temp_now]
+	log_output = np.array([step,E_kin,E_pot,E_tot,temp_now])
+	print(log_output)
 
-	np.savetxt(f2, log_output)
+	f2.write("\t".join([str(a) for a in log_output])+"\n")
+	# np.savetxt(f2, log_output,fmt=('%i','%.8f','%.8f','%.8f','%.8f'))
 	return None
 
 #Forces = np.zeros((Natoms,3,2)) # why a tensor?
 # KEnergy = np.zeros((Natoms,2))
 # PEnergy = np.zeros((Natoms,2))
+
 
 def main():
 
@@ -222,10 +226,8 @@ def main():
 	dump_xyz(X,0,trajectory_file)
 
 
-	V[:,0] = np.random.randn()
-	V[:,1] = np.random.randn()
+	V = np.random.randn(np.shape(V)[0],np.shape(V)[1])
 
-	print(V)
 	# calculate CM velocity
 	# XMassVelocity, YMassVelocity = 0,0
 	XMassVelocity = np.sum(V[:,0])

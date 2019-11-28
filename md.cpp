@@ -43,7 +43,7 @@ int main(){
     float X_cm=0, Y_cm=0;
     int i,j,k,N,a,step=0,idum=-8; 
     ofstream M_output_file ("dump.xyz");
-    ofstream E_output_file ("log.txt");
+    ofstream E_output_file ("log.dat");
     cout<<"inter full time:\n ";
 //     cin>>T;
     T = 100000;
