@@ -12,7 +12,7 @@ import numba
 
 box_size = 8
 displacement = 1.5
-Natoms = 20    #Natoms of atoms
+Natoms = 5    #Natoms of atoms
 cutoff = 2.5   #cut off
 dump_step = 1000   
 log_step = 100  
@@ -50,34 +50,56 @@ def pbc(X):
 
 # needs refactoring
 def force(X,F):
-	F[:,:] = 0
+	print("== X ==\n",X)
+	F[:,:] = 0.0
 
 	box_half_size = box_size/2
 	# this loop can be vectorized --see numpy documentation
-	for i in range(Natoms):
-		for j in range(Natoms):
-			# vectorize this
-			if j!=i:
-			#what is this?
-				solid_distance_x = np.abs(X[i,0]-X[j,0])
-				solid_distance_y = np.abs(X[i,1]-X[j,1])
-				delta_x = -solid_distance_x + box_size * np.floor(solid_distance_x/box_half_size)
-				delta_y = -solid_distance_y + box_size * np.floor(solid_distance_y/box_half_size)
-				r2 = delta_x**2 + delta_y**2
-		
-				# what is this
-				if np.sqrt(r2)<cutoff:
-					if X[i,0]<X[j,0]:
-						F[i,0] += delta_x*48*(1/r2**7) - 1/(2*r2**4)
-					else:
-						F[i,0] += -delta_x*48*(1/r2**7) - 1/(2*r2**4)
-					if X[i,1]<X[j,1]:
-						F[i,1] += delta_y*48*(1/r2**7) - 1/(2*r2**4)
-					else:
-						F[i,1] += -delta_y*48*(1/r2**7) - 1/(2*r2**4)
-		
-	# F = -F.T + F + F[np.diag_indices_from(F)]
+	# for i in range(Natoms):
+	# 	for j in range(Natoms):
+	# matrix with indices of off-diagonal elements
+	off_diagonal_elements = np.ones(F.shape,dtype=bool)
+	np.fill_diagonal(off_diagonal_elements,0)
+	# vectorize this
+	# if j!=i:
 
+	#what is this?
+	solid_distance_x = np.abs(X[:-1,0]-X[1:,0])
+	solid_distance_y = np.abs(X[:-1,1]-X[1:,1])
+	delta_x = -solid_distance_x + box_size * np.floor(solid_distance_x/box_half_size)
+	delta_y = -solid_distance_y + box_size * np.floor(solid_distance_y/box_half_size)
+	r2 = delta_x**2 + delta_y**2
+	print("== r^2 ==\n",r2)
+	
+	r2_smaller_than_cutoff = np.sqrt(r2)<cutoff
+	# what is this
+	X_truefalse_x = np.logical_and(X[:-1,0]<X[1:,0],r2_smaller_than_cutoff)
+	X_truefalse_y = np.logical_and(X[:-1,1]<X[1:,1],r2_smaller_than_cutoff)
+
+	# fixes array dimension
+	F_temp = F[:-1,:]
+	F_temp = F[:-1,:]
+
+	F_temp[X_truefalse_x,0] += delta_x[X_truefalse_x]*48*((1/r2[X_truefalse_x]**7) - 1/(2*r2[~X_truefalse_x]**4))
+	F_temp[X_truefalse_y,0] += delta_y[X_truefalse_y]*48*((1/r2[X_truefalse_y]**7) - 1/(2*r2[~X_truefalse_x]**4))
+
+
+	F_temp[~X_truefalse_x,0] -= delta_x[~X_truefalse_x]*48*((1/r2[~X_truefalse_x]**7) - 1/(2*r2[~X_truefalse_x]**4))
+	F_temp[~X_truefalse_y,0] -= delta_y[~X_truefalse_y]*48*((1/r2[~X_truefalse_x]**7) - 1/(2*r2[~X_truefalse_x]**4))
+
+	# if np.sqrt(r2)<cutoff:
+	# 	if X[:-1,0]<X[1:,0]:
+	# 		F[:,0] += delta_x*48*((1/r2**7) - 1/(2*r2**4))
+	# 	else:
+	# 		F[:,0] -= delta_x*48*((1/r2**7) - 1/(2*r2**4))
+	# 	if X[:,1]<X[:,1]:
+	# 		F[:,1] += delta_y*48*((1/r2**7) - 1/(2*r2**4))
+	# 	else:
+	# 		F[:,1] -= -delta_y*48*((1/r2**7) - 1/(2*r2**4))
+	
+	# F = -F.T + F + F[np.diag_indices_from(F)]
+	F[off_diagonal_elements] = 0.0
+	F[:-1,:] = F_temp
 	return F
 
 # needs to be vectorized
@@ -208,6 +230,7 @@ def main():
 
 	m = displacement
 	N = Natoms
+	print(k)
 
 	for j in range(int(Natoms/k)):
 		for i in range(int(k)+1):
@@ -220,8 +243,11 @@ def main():
 				N -= 1
 
 	# move CM to the center of the box
+	print("-- X --\n",X)
+
 	X[:,0] += box_size/2-X_cm
 	X[:,1] += box_size/2-Y_cm
+
 
 	dump_xyz(X,0,trajectory_file)
 
