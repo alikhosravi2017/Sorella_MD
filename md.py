@@ -2,7 +2,7 @@
 import numpy as np
 import time
 import os
-import numba
+# import numba
 #####################################################
 #                                                   #
 #              Preliminary code                     #
@@ -12,7 +12,7 @@ import numba
 
 box_size = 8
 displacement = 1.5
-Natoms = 5    #Natoms of atoms
+Natoms = 2    #Natoms of atoms
 cutoff = 2.5   #cut off
 dump_step = 1000   
 log_step = 100  
@@ -50,7 +50,7 @@ def pbc(X):
 
 # needs refactoring
 def force(X,F):
-	print("== X ==\n",X)
+	#print("== X ==\n",X)
 	F[:,:] = 0.0
 
 	box_half_size = box_size/2
@@ -69,7 +69,7 @@ def force(X,F):
 	delta_x = -solid_distance_x + box_size * np.floor(solid_distance_x/box_half_size)
 	delta_y = -solid_distance_y + box_size * np.floor(solid_distance_y/box_half_size)
 	r2 = delta_x**2 + delta_y**2
-	print("== r^2 ==\n",r2)
+	#print("== r^2 ==\n",r2)
 	
 	r2_smaller_than_cutoff = np.sqrt(r2)<cutoff
 	# what is this
@@ -78,14 +78,18 @@ def force(X,F):
 
 	# fixes array dimension
 	F_temp = F[:-1,:]
-	F_temp = F[:-1,:]
+
+	print( F_temp[X_truefalse_y,1].shape)
+	print( delta_x[X_truefalse_y].shape)
+	print(X_truefalse_y)
+	print(F_temp[X_truefalse_y,1])
 
 	F_temp[X_truefalse_x,0] += delta_x[X_truefalse_x]*48*((1/r2[X_truefalse_x]**7) - 1/(2*r2[~X_truefalse_x]**4))
-	F_temp[X_truefalse_y,0] += delta_y[X_truefalse_y]*48*((1/r2[X_truefalse_y]**7) - 1/(2*r2[~X_truefalse_x]**4))
+	F_temp[X_truefalse_y,1] += delta_y[X_truefalse_y]*48*((1/r2[X_truefalse_y]**7) - 1/(2*r2[~X_truefalse_y]**4))
 
 
 	F_temp[~X_truefalse_x,0] -= delta_x[~X_truefalse_x]*48*((1/r2[~X_truefalse_x]**7) - 1/(2*r2[~X_truefalse_x]**4))
-	F_temp[~X_truefalse_y,0] -= delta_y[~X_truefalse_y]*48*((1/r2[~X_truefalse_x]**7) - 1/(2*r2[~X_truefalse_x]**4))
+	F_temp[~X_truefalse_y,1] -= delta_y[~X_truefalse_y]*48*((1/r2[~X_truefalse_y]**7) - 1/(2*r2[~X_truefalse_y]**4))
 
 	# if np.sqrt(r2)<cutoff:
 	# 	if X[:-1,0]<X[1:,0]:
@@ -202,7 +206,7 @@ def log(X,V,step,fname):
 	E_tot = E_kin+E_pot
 	temp_now = temperature(V)*temp_true
 	log_output = np.array([step,E_kin,E_pot,E_tot,temp_now])
-	print(log_output)
+	#print(log_output)
 
 	f2.write("\t".join([str(a) for a in log_output])+"\n")
 	# np.savetxt(f2, log_output,fmt=('%i','%.8f','%.8f','%.8f','%.8f'))
@@ -230,7 +234,7 @@ def main():
 
 	m = displacement
 	N = Natoms
-	print(k)
+	#print(k)
 
 	for j in range(int(Natoms/k)):
 		for i in range(int(k)+1):
@@ -243,7 +247,7 @@ def main():
 				N -= 1
 
 	# move CM to the center of the box
-	print("-- X --\n",X)
+	#print("-- X --\n",X)
 
 	X[:,0] += box_size/2-X_cm
 	X[:,1] += box_size/2-Y_cm
@@ -267,7 +271,7 @@ def main():
 	XMassVelocity = np.sum(V[:,0])
 	YMassVelocity = np.sum(V[:,1])
 
-	# print(XMassVelocity,YMassVelocity)
+	# #print(XMassVelocity,YMassVelocity)
 	thermostat_velocity_rescaling(V)
 
 	# calculate a0 ? acceleration?
@@ -278,14 +282,14 @@ def main():
 	t_start = time.time()
 	T = 100000
 	for step in range(T):
-		# print(V)
+		# #print(V)
 		V,X,F = velocity_verlet(V,X,F)
 		dump_xyz(X,step,trajectory_file)
 		log(X,V,step,log_file)
 		if step%temp_step==0:
 			thermostat_velocity_rescaling(V)
 	t_end = time.time()
-	print("Time taken: {:.2f} seconds\n".format(t_end-t_start))
+	#print("Time taken: {:.2f} seconds\n".format(t_end-t_start))
 
 	f.close()
 	f2.close()
