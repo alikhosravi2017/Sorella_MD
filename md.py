@@ -2,7 +2,7 @@
 import numpy as np
 import time
 import os
-import numba
+from numba import njit,prange
 #####################################################
 #                                                   #
 #              Preliminary code                     #
@@ -12,17 +12,17 @@ import numba
 
 box_size = 8
 displacement = 1.5
-Natoms = 20    #Natoms of atoms
+Natoms = 50    #Natoms of atoms
 cutoff = 2.5   #cut off
 dump_step = 1000   
-log_step = 100  
+log_step = 1000  
 dt = 0.00001
 temp_ref = 160 #K
 temp_step = 100 # ever 100th step
 kB_true = 1.38064852e-23  #m2 kg s-2 K-1
 epsilon_true = 1.65e-21 #J
 sigma_true = 3.4e-10    #m
-random_seed = 8
+# random_seed = 8
 trajectory_file = "traj.xyz"
 log_file = "output.dat"
 
@@ -33,7 +33,7 @@ os.remove(log_file)
 f = open(trajectory_file, "ab")
 f2 = open(log_file, "a")
 
-np.random.seed = random_seed
+np.random.seed(8)
 
 
  #  kB         1 
@@ -49,13 +49,14 @@ def pbc(X):
 	return X
 
 # needs refactoring
+@njit(parallel=True)
 def force(X,F):
 	F[:,:] = 0
 
 	box_half_size = box_size/2
 	# this loop can be vectorized --see numpy documentation
-	for i in range(Natoms):
-		for j in range(Natoms):
+	for i in prange(Natoms):
+		for j in prange(Natoms):
 			# vectorize this
 			if j!=i:
 			#what is this?
@@ -81,7 +82,7 @@ def force(X,F):
 	return F
 
 # needs to be vectorized
-
+@njit(parallel=False)
 def potential_energy(X):
 	E = 0
 	for i in range(Natoms):
@@ -180,7 +181,7 @@ def log(X,V,step,fname):
 	E_tot = E_kin+E_pot
 	temp_now = temperature(V)*temp_true
 	log_output = np.array([step,E_kin,E_pot,E_tot,temp_now])
-	print(log_output)
+	# print(log_output)
 
 	f2.write("\t".join([str(a) for a in log_output])+"\n")
 	# np.savetxt(f2, log_output,fmt=('%i','%.8f','%.8f','%.8f','%.8f'))
@@ -190,8 +191,8 @@ def log(X,V,step,fname):
 # KEnergy = np.zeros((Natoms,2))
 # PEnergy = np.zeros((Natoms,2))
 
-
-def main():
+@njit(parallel=True)
+def pre_main():
 
 
 	# initialize positions, velocities and forces
@@ -223,7 +224,7 @@ def main():
 	X[:,0] += box_size/2-X_cm
 	X[:,1] += box_size/2-Y_cm
 
-	dump_xyz(X,0,trajectory_file)
+
 
 
 	V = np.random.randn(np.shape(V)[0],np.shape(V)[1])
@@ -241,13 +242,23 @@ def main():
 	XMassVelocity = np.sum(V[:,0])
 	YMassVelocity = np.sum(V[:,1])
 
+
+
+	# MAIN
+
+	return V,X,F
+
+def main():
+
+	V,X,F = pre_main()
+
+	dump_xyz(X,0,trajectory_file)
+
 	# print(XMassVelocity,YMassVelocity)
 	thermostat_velocity_rescaling(V)
 
 	# calculate a0 ? acceleration?
 	F = force(X,F)
-
-	# MAIN
 
 	t_start = time.time()
 	T = 100000
@@ -263,7 +274,6 @@ def main():
 
 	f.close()
 	f2.close()
-
 	return None
 
 # class MD(object):
