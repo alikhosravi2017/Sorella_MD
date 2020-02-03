@@ -18,7 +18,7 @@ try:
     	axs[1].plot(data[:,0],data[:,4])
     	axs[1].set_ylim(bottom=0.)
     	axs[1].set_xlabel("step [a.u.]")
-    	axs[1].set_ylabel("Temperature [a.u.]")
+    	axs[1].set_ylabel("Temperature [ K ]")
     	# print(np.std(data[10:,4])) # std deviation of temperature
     	fig.tight_layout()
     	plt.show()

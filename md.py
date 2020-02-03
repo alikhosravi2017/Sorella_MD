@@ -17,8 +17,8 @@ cutoff = 2.5   #cut off
 dump_step = 1000   
 log_step = 1000  
 dt = 0.00001
-temp_ref = 60 #K
-temp_step = 100 # ever 100th step
+temp_ref = 60 # reference tempreature in Kelvin
+temp_step = 1000 # thermostat every N steps
 kB_true = 1.38064852e-23  #m2 kg s-2 K-1
 epsilon_true = 1.65e-21 #J
 sigma_true = 3.4e-10    #m
@@ -63,9 +63,11 @@ def force(X,F):
 			#what is this?
 				solid_distance_x = np.abs(X[i,0]-X[j,0])
 				solid_distance_y = np.abs(X[i,1]-X[j,1])
+				solid_distance_z = np.abs(X[i,2]-X[j,2])
 				delta_x = -solid_distance_x + box_size * np.floor(solid_distance_x/box_half_size)
 				delta_y = -solid_distance_y + box_size * np.floor(solid_distance_y/box_half_size)
-				r2 = delta_x**2 + delta_y**2
+				delta_z = -solid_distance_z + box_size * np.floor(solid_distance_z/box_half_size)
+				r2 = delta_x**2 + delta_y**2 + delta_z**2
 		
 				# what is this
 				if np.sqrt(r2)<cutoff:
@@ -77,7 +79,10 @@ def force(X,F):
 						F[i,1] += delta_y*48*(1/r2**7) - 1/(2*r2**4)
 					else:
 						F[i,1] += -delta_y*48*(1/r2**7) - 1/(2*r2**4)
-		
+					if X[i,2]<X[j,2]:
+						F[i,2] += delta_x*48*(1/r2**7) - 1/(2*r2**4)
+					else:
+						F[i,2] += -delta_x*48*(1/r2**7) - 1/(2*r2**4)
 	# F = -F.T + F + F[np.diag_indices_from(F)]
 
 	return F
@@ -97,7 +102,13 @@ def potential_energy(X):
 				delta_y = box_size - np.abs(X[i,1]-X[j,1])
 			else:
 				delta_y = np.abs(X[i,1]-X[j,1])
-			r = np.sqrt(delta_x**2 + delta_y**2)
+			
+			if np.abs(X[i,2]-X[j,2]) > box_size/2:
+				delta_z = box_size - np.abs(X[i,2]-X[j,2])		
+			else:
+				delta_z = np.abs(X[i,2]-X[j,2])
+
+			r = np.sqrt(delta_x**2 + delta_y**2 + delta_z**2)
 			if r<cutoff:
 				E += 4 * ( r**-12 - r**-6)
 	# for i in range(Natoms):
@@ -165,7 +176,7 @@ def dump_xyz(X,step,fname):
 		return None
 
 	atom_types = Natoms*[1]
-	xyz = np.array([atom_types,X[:,0],X[:,1],np.zeros(np.shape(X)[0])]).T
+	xyz = np.array([atom_types,X[:,0],X[:,1],X[:,2]]).T
 
 	f.write(str(Natoms).encode())
 	f.write(b"\n atoms\n")
@@ -197,14 +208,14 @@ def pre_main():
 
 
 	# initialize positions, velocities and forces
-	X = np.zeros((Natoms,2))
-	V = np.zeros((Natoms,2))
-	F = np.zeros((Natoms,2))
+	X = np.zeros((Natoms,3))
+	V = np.zeros((Natoms,3))
+	F = np.zeros((Natoms,3))
 
 
 
 	# how does this work?
-	X_cm, Y_cm = 0,0
+	X_cm, Y_cm, Z_cm = 0.,0.,0.
 
 	k = np.sqrt(Natoms/2)+1
 
@@ -217,31 +228,37 @@ def pre_main():
 			if N!=0:
 				X[Natoms-N,0] = i*m
 				X[Natoms-N,1] = (j+1)*m
+				X[Natoms-N,2] = ????
 				X_cm += X[Natoms-N,0]/Natoms
 				Y_cm += X[Natoms-N,1]/Natoms
+				Z_cm += X[Natoms-N,2]/Natoms
 				N -= 1
 
 	# move CM to the center of the box
 	X[:,0] += box_size/2-X_cm
 	X[:,1] += box_size/2-Y_cm
+	X[:,2] += box_size/2-Z_cm
 
 
 
 
-	V = np.random.randn(np.shape(V)[0],np.shape(V)[1])
+	V = np.random.randn(np.shape(V)[0],np.shape(V)[1],np.shape(V)[2])
 
 	# calculate CM velocity
 	# XMassVelocity, YMassVelocity = 0,0
 	XMassVelocity = np.sum(V[:,0])
 	YMassVelocity = np.sum(V[:,1])
+	ZMassVelocity = np.sum(V[:,2])
 
 	# set CM velocity to zero
 	V[:,0] -= XMassVelocity/Natoms
 	V[:,1] -= YMassVelocity/Natoms
+	V[:,2] -= ZMassVelocity/Natoms
 
 
 	XMassVelocity = np.sum(V[:,0])
 	YMassVelocity = np.sum(V[:,1])
+	ZMassVelocity = np.sum(V[:,2])
 
 
 
