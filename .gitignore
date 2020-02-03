@@ -1,9 +1,8 @@
+# trajectory log output
+*.dat
+*.xyz
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
 *$py.class
 .DS_Store
-
-# trajectory log output
-*.dat
-*.xyz
