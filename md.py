@@ -3,14 +3,22 @@ import numpy as np
 import time
 import os
 from numba import njit,prange
+from ase import visualize
+from ase.build import stack
+from ase.io import write
+import numpy as np
+from ase.build import bulk
 #####################################################
 #                                                   #
 #              Preliminary code                     #
 #       -> needs refactoring into OOP paradigm      #
 #                                                   #
 #####################################################
-Natoms = 50    #Natoms of atoms
-box_size = 8
+Natoms = 0 # will be set, also as global value in premain
+n_a = 10  #Natoms of primitive cell in a direction
+n_b = 10  #Natoms of primitive cell in b direction
+n_c = 10  #Natoms of primitive cell in c direction
+box_sizes = [0,0,0] # from 0 to L in each direction. will be set, also as global value in premain
 Nsteps = 10**6
 displacement = 1.5
 cutoff = 2.5   #cut off
@@ -29,24 +37,22 @@ log_file = "output.dat"
 
 np.random.seed(8)
 
-# clean old files
-os.remove(trajectory_file)
-os.remove(log_file)
-# open files for writting
+try:
+	os.remove(trajectory_file)
+	os.remove(log_file)
+except OSError: pass
 f = open(trajectory_file, "ab")
 f2 = open(log_file, "a")
-
-
- #  kB         1 
- #  epsilon    1
- #  sigma      1
+#  kB         1
+#  epsilon    1
+#  sigma      1
 
 
 
 def pbc(X):
-	X -= box_size*np.floor(X/box_size)
-	# X[:,0] -= box_size*np.floor(X[:,0]/box_size)
-	# X[:,1] -= box_size*np.floor(X[:,1]/box_size)
+	X[:,0] -= box_sizes[0]*np.floor(X[:,0]/box_sizes[0])
+	X[:,1] -= box_sizes[1]*np.floor(X[:,1]/box_sizes[1])
+	X[:,2] -= box_sizes[2]*np.floor(X[:,2]/box_sizes[2])
 	return X
 
 # needs refactoring
@@ -55,7 +61,8 @@ def force(X,F):
 	#print("== X ==\n",X)
 	F[:,:] = 0.0
 
-	box_half_size = box_size/2
+	box_half_sizes = box_sizes/2
+
 	# this loop can be vectorized --see numpy documentation
 	for i in prange(Natoms):
 		for j in prange(Natoms):
@@ -65,28 +72,26 @@ def force(X,F):
 				solid_distance_x = np.abs(X[i,0]-X[j,0])
 				solid_distance_y = np.abs(X[i,1]-X[j,1])
 				solid_distance_z = np.abs(X[i,2]-X[j,2])
-				delta_x = -solid_distance_x + box_size * np.floor(solid_distance_x/box_half_size)
-				delta_y = -solid_distance_y + box_size * np.floor(solid_distance_y/box_half_size)
-				delta_z = -solid_distance_z + box_size * np.floor(solid_distance_z/box_half_size)
+				delta_x = -solid_distance_x + box_sizes[0] * np.floor(solid_distance_x/box_half_sizes[0])
+				delta_y = -solid_distance_y + box_sizes[1] * np.floor(solid_distance_y/box_half_sizes[1])
+				delta_z = -solid_distance_z + box_sizes[2] * np.floor(solid_distance_z/box_half_sizes[2])
 				r2 = delta_x**2 + delta_y**2 + delta_z**2
 		
 				# what is this
 				if np.sqrt(r2)<cutoff:
 					if X[i,0]<X[j,0]:
-						F[i,0] += delta_x*48*(1/r2**7) - 1/(2*r2**4)
+						F[i,0] += delta_x*48*((1/r2**7) - 1/(2*r2**4))
 					else:
-						F[i,0] += -delta_x*48*(1/r2**7) - 1/(2*r2**4)
+						F[i,0] += -delta_x*48*((1/r2**7) - 1/(2*r2**4))
 					if X[i,1]<X[j,1]:
-						F[i,1] += delta_y*48*(1/r2**7) - 1/(2*r2**4)
+						F[i,1] += delta_y*48*((1/r2**7) - 1/(2*r2**4))
 					else:
-						F[i,1] += -delta_y*48*(1/r2**7) - 1/(2*r2**4)
+						F[i,1] += -delta_y*48*((1/r2**7) - 1/(2*r2**4))
 					if X[i,2]<X[j,2]:
-						F[i,2] += delta_x*48*(1/r2**7) - 1/(2*r2**4)
+						F[i,2] += delta_x*48*((1/r2**7) - 1/(2*r2**4))
 					else:
-						F[i,2] += -delta_x*48*(1/r2**7) - 1/(2*r2**4)
+						F[i,2] += -delta_x*48*((1/r2**7) - 1/(2*r2**4))
 	# F = -F.T + F + F[np.diag_indices_from(F)]
-	F[off_diagonal_elements] = 0.0
-	F[:-1,:] = F_temp
 	return F
 
 # needs to be vectorized
@@ -95,18 +100,18 @@ def potential_energy(X):
 	E = 0
 	for i in range(Natoms):
 		for j in range(i+1,Natoms):
-			if np.abs(X[i,0]-X[j,0]) > box_size/2:
-				delta_x = box_size - np.abs(X[i,0]-X[j,0])		
+			if np.abs(X[i,0]-X[j,0]) > box_sizes[0]/2:
+				delta_x = box_sizes[0] - np.abs(X[i,0]-X[j,0])
 			else:
 				delta_x = np.abs(X[i,0]-X[j,0])
 
-			if np.abs(X[i,1]-X[j,1]) > box_size/2:
-				delta_y = box_size - np.abs(X[i,1]-X[j,1])
+			if np.abs(X[i,1]-X[j,1]) > box_sizes[1]/2:
+				delta_y = box_sizes[1] - np.abs(X[i,1]-X[j,1])
 			else:
 				delta_y = np.abs(X[i,1]-X[j,1])
 			
-			if np.abs(X[i,2]-X[j,2]) > box_size/2:
-				delta_z = box_size - np.abs(X[i,2]-X[j,2])		
+			if np.abs(X[i,2]-X[j,2]) > box_sizes[2]/2:
+				delta_z = box_sizes[2] - np.abs(X[i,2]-X[j,2])
 			else:
 				delta_z = np.abs(X[i,2]-X[j,2])
 
@@ -205,9 +210,31 @@ def log(X,V,step,fname):
 # KEnergy = np.zeros((Natoms,2))
 # PEnergy = np.zeros((Natoms,2))
 
+### positioning
+def create_atoms(n_a, n_b, n_c):
+	unitcell = bulk('Ar', 'fcc', 1.5, orthorhombic=True)  # ===> epsilon unit
+	atoms_a = unitcell
+	for i in range(n_a - 1):
+		atoms_a = stack(atoms_a, unitcell, axis=0)
+	atoms_b = atoms_a
+	for j in range(n_b - 1):
+		atoms_b = stack(atoms_b, atoms_a, axis=1)
+	all_atoms = atoms_b
+	for k in range(n_c - 1):
+		all_atoms = stack(all_atoms, atoms_b, axis=2)
+	return all_atoms
+###
+
+
+
+
 @njit(parallel=True)
 def pre_main():
-
+	atoms = create_atoms(n_a, n_b, n_c)
+	global Natoms
+	global box_sizes
+	Natoms = atoms.get_number_of_atoms()
+	box_sizes = np.array([atoms.get_cell()[0][0],   atoms.get_cell()[1][1],  atoms.get_cell()[2][2] ] )
 
 	# initialize positions, velocities and forces
 	X = np.zeros((Natoms,3))
@@ -225,24 +252,25 @@ def pre_main():
 	N = Natoms
 	#print(k)
 
-	for j in range(int(Natoms/k)):
-		for i in range(int(k)+1):
-			# strange loop...
-			if N!=0:
-				X[Natoms-N,0] = i*m
-				X[Natoms-N,1] = (j+1)*m
-				X[Natoms-N,2] = ????
-				X_cm += X[Natoms-N,0]/Natoms
-				Y_cm += X[Natoms-N,1]/Natoms
-				Z_cm += X[Natoms-N,2]/Natoms
-				N -= 1
-
-	# move CM to the center of the box
-	#print("-- X --\n",X)
-
-	X[:,0] += box_size/2-X_cm
-	X[:,1] += box_size/2-Y_cm
-	X[:,2] += box_size/2-Z_cm
+	# you can delete me
+	# for j in range(int(Natoms/k)):
+	# 	for i in range(int(k)+1):
+	# 		# strange loop...
+	# 		if N!=0:
+	# 			X[Natoms-N,0] = i*m
+	# 			X[Natoms-N,1] = (j+1)*m
+	# 			X[Natoms-N,2] = ????
+	# 			X_cm += X[Natoms-N,0]/Natoms
+	# 			Y_cm += X[Natoms-N,1]/Natoms
+	# 			Z_cm += X[Natoms-N,2]/Natoms
+	# 			N -= 1
+    #
+	# # move CM to the center of the box
+	# #print("-- X --\n",X)
+    #
+	# X[:,0] += box_size/2-X_cm
+	# X[:,1] += box_size/2-Y_cm
+	# X[:,2] += box_size/2-Z_cm
 
 
 
