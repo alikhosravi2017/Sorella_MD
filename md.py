@@ -28,8 +28,8 @@ dt = 0.00001
 temp_ref = 1 # reference tempreature in Kelvin
 temp_step = 1000 # thermostat every N steps
 kB_true = 1.38064852e-23  #m2 kg s-2 K-1
-epsilon_true = 1.65e-21 #J
-sigma_true = 3.4e-10    #m
+epsilon_true = 1.977e-21 #J
+sigma_true = 3.348e-10    #m
 # random_seed = 8
 trajectory_file = "traj.xyz"
 log_file = "output.dat"
@@ -194,7 +194,7 @@ def log(X,V,step,fname):
 
 ### positioning
 def create_atoms(n_a, n_b, n_c):
-    unitcell = bulk('Ar', 'fcc', 1.222*2/np.sqrt(2), cubic=True)  # ===>  1.122 sigma
+    unitcell = bulk('Ar', 'fcc', np.power(2,(1./6))*2/np.sqrt(2), cubic=True)  # ===>  1.122 sigma
     # visualize.view(unitcell)
     # print unitcell.get_cell()
     atoms_a = unitcell
