@@ -17,25 +17,33 @@ from ase.build import bulk
 Natoms = 0 # will be set, also as global value in premain
 n_a = 2  #Natoms of primitive cell in a direction
 n_b = 2  #Natoms of primitive cell in b direction
-n_c = 2  #Natoms of primitive cell in c direction
+n_c = 1  #Natoms of primitive cell in c direction
 box_sizes = [0,0,0] # from 0 to L in each direction. will be set, also as global value in premain
 Nsteps = 10**6
-cutoff = 3   #cut off
-dump_step = 1000
-log_step = 1000
+cutoff = 30   #cut off
+dump_step = 10
+log_step = 10
 velocity_zeroing_step =100
-dt = 0.00001
+dt = 0.0005
 temp_ref = 1 # reference tempreature in Kelvin
-temp_step = 1000 # thermostat every N steps
+temp_step = 1000000 # thermostat every N steps
+Potential_formula= 'LJ' # 'LJ' or 'Morse'
 kB_true = 1.38064852e-23  #m2 kg s-2 K-1
-epsilon_true = 1.977e-21 #J
-sigma_true = 3.348e-10    #m
+if Potential_formula == 'LJ':
+    epsilon_true = 1.65e-21  #1.977e-21 #J
+    sigma_true = 3.4e-10 #3.348e-10    #m
+    mass = 6.6335209e-26  # kg
+    tau = (1.0)/np.sqrt(epsilon_true/(mass*sigma_true*sigma_true)) # time unit in second
+    print "time unit is= {0} Seconds\n and timestep={1} femtoseconds".format(tau,tau*dt*1e15)
+if Potential_formula == 'Morse':
+    epsilon_true =0 #J
+    sigma_true = 0   #m
 # random_seed = 8
 trajectory_file = "traj.xyz"
 log_file = "output.dat"
 
 
-np.random.seed(8)
+np.random.seed(4)
 
 try:
     os.remove(trajectory_file)
@@ -58,42 +66,42 @@ def pbc(X):
 # needs refactoring
 @njit(parallel=True)
 def force(X,F):
-    #print("== X ==\n",X)
     F[:,:] = 0.0
-
     box_half_sizes = box_sizes/2
-
     # this loop can be vectorized --see numpy documentation
     for i in prange(Natoms):
-        for j in prange(Natoms):
+        for j in prange(i+1,Natoms):
             # vectorize this
-            if j!=i:
-        #what is this?
-                solid_distance_x = np.abs(X[i,0]-X[j,0])
-                solid_distance_y = np.abs(X[i,1]-X[j,1])
-                solid_distance_z = np.abs(X[i,2]-X[j,2])
-                delta_x = -solid_distance_x + box_sizes[0] * np.floor(solid_distance_x/box_half_sizes[0])
-                delta_y = -solid_distance_y + box_sizes[1] * np.floor(solid_distance_y/box_half_sizes[1])
-                delta_z = -solid_distance_z + box_sizes[2] * np.floor(solid_distance_z/box_half_sizes[2])
-                r2 = delta_x**2 + delta_y**2 + delta_z**2
-
-                # what is this
-                if np.sqrt(r2)<cutoff:
-                    if X[i,0]<X[j,0]:
-                        F[i,0] += delta_x*48*((1/r2**7) - 1/(2*r2**4))
-                    else:
-                        F[i,0] += -delta_x*48*((1/r2**7) - 1/(2*r2**4))
-
-                    if X[i,1]<X[j,1]:
-                        F[i,1] += delta_y*48*((1/r2**7) - 1/(2*r2**4))
-                    else:
-                        F[i,1] += -delta_y*48*((1/r2**7) - 1/(2*r2**4))
-
-                    if X[i,2]<X[j,2]:
-                        F[i,2] += delta_x*48*((1/r2**7) - 1/(2*r2**4))
-                    else:
-                        F[i,2] += -delta_x*48*((1/r2**7) - 1/(2*r2**4))
-    # F = -F.T + F + F[np.diag_indices_from(F)]
+            solid_distance_x = np.abs(X[i,0]-X[j,0])
+            solid_distance_y = np.abs(X[i,1]-X[j,1])
+            solid_distance_z = np.abs(X[i,2]-X[j,2])
+            delta_x = solid_distance_x - box_sizes[0] * np.floor(solid_distance_x/box_half_sizes[0])
+            delta_y = solid_distance_y - box_sizes[1] * np.floor(solid_distance_y/box_half_sizes[1])
+            delta_z = solid_distance_z - box_sizes[2] * np.floor(solid_distance_z/box_half_sizes[2])
+            r2 = delta_x**2 + delta_y**2 + delta_z**2
+            # what is this
+            if np.sqrt(r2)<cutoff:
+                f0= 48*((1.0/r2**7) - 1.0/(2*r2**4))
+                if X[i,0]<X[j,0]:
+                    F[i,0] += -delta_x*f0
+                    F[j,0] += +delta_x*f0
+                else:
+                    F[i,0] += +delta_x*f0
+                    F[j,0] += -delta_x*f0
+                #
+                if X[i,1]<X[j,1]:
+                    F[i,1] += -delta_y*f0
+                    F[j,1] += +delta_y*f0
+                else:
+                    F[i,1] += +delta_y*f0
+                    F[j,1] += -delta_y*f0
+                #
+                if X[i,2]<X[j,2]:
+                    F[i,2] += -delta_x*f0
+                    F[j,2] += +delta_x*f0
+                else:
+                    F[i,2] += +delta_x*f0
+                    F[j,2] += -delta_x*f0
     return F
 
 # needs to be vectorized
@@ -124,13 +132,13 @@ def potential_energy(X):
 
 
 def kinetic_energy(V):
-    # is this ok?
+    # is this ok?  YES
     E = .5*np.sum(V**2)
     return E
 
 
 def temperature(V):
-    #is this ok
+    #is this ok  => yes
     return kinetic_energy(V) * 2/(3*Natoms)
 
 
@@ -143,25 +151,25 @@ def thermostat_velocity_rescaling(V):
 
 
 def velocity_verlet(V,X,F_0):
-    #verlet loop
-    # V[:,0] += dt/2*F[:,0]
-    # V[:,1] += dt/2*F[:,1]
-    # X[:,0] += dt*V[:,0]
-    # X[:,1] += dt*V[:,1]
-    V += dt/2 * F_0
-    X += dt*V
+    #verlet loop better formulation from wikipedia
+    #
+
+    X += dt*V + F_0*dt*dt/2
     X = pbc(X)
+    F_1 = force(X, F_0)
+    V +=  (F_1+F_0) * dt / 2
 
-    # calculate accelerations
-    F_1 = np.array(force(X,F_0))
-    # calculate velocities at halfstep
-    # V[:,0] += dt/2 * F[:,0]
-    # V[:,1] += dt/2 * F[:,1]
-    V += dt/2*F_1
-    F_0 = F_1
-    return V,X,F_0
+    # V += dt/2 * F_0
+    # X += dt*V
+    # X = pbc(X)
+    #
+    # # calculate accelerations
+    # F_1 = np.array(force(X,F_0))
+    # # calculate velocities at halfstep
+    # V += dt/2*F_1
+    return V,X,F_1
 
-def dump_xyz(X,step,fname):
+def dump_xyz(X,step):
     if step%dump_step!=0:
         return None
 
@@ -173,7 +181,7 @@ def dump_xyz(X,step,fname):
     np.savetxt(f, xyz,fmt=('%i','%.8f','%.8f','%.8f'))
     return None
 
-def log(X,V,step,fname):
+def log(X,V,step):
     if step%log_step!=0:
         return None
 
@@ -194,7 +202,7 @@ def log(X,V,step,fname):
 
 ### positioning
 def create_atoms(n_a, n_b, n_c):
-    unitcell = bulk('Ar', 'fcc', np.power(2,(1./6))*2/np.sqrt(2), cubic=True)  # ===>  1.122 sigma
+    unitcell = bulk('Ar', 'fcc', np.power(2,(2./3)), orthorhombic=True)  # ===>  1.122 sigma
     # visualize.view(unitcell)
     # print unitcell.get_cell()
     atoms_a = unitcell
@@ -240,6 +248,7 @@ def pre_main():
     F = np.zeros((Natoms,3))
 
     V = np.random.randn(np.shape(V)[0],np.shape(V)[1])
+    # print(V)
     V = fix_COM_velocity(V)
     V = thermostat_velocity_rescaling(V)
     return V,X,F
@@ -247,11 +256,11 @@ def pre_main():
 def main():
 
     V,X,F = pre_main()
-    dump_xyz(X,0,trajectory_file)
+    dump_xyz(X,0)
     # print(XMassVelocity,YMassVelocity)
 
 
-    # calculate a0 ? acceleration?
+    # calculate a0 ? acceleration?  => yes
     F = force(X,F)
 
     t_start = time.time()
@@ -259,8 +268,8 @@ def main():
     for step in range(Nsteps):
         # print(V)
         V,X,F = velocity_verlet(V,X,F)
-        dump_xyz(X,step,trajectory_file)
-        log(X,V,step,log_file)
+        dump_xyz(X,step)
+        log(X,V,step)
         if step % velocity_zeroing_step == 0:
             V = fix_COM_velocity(V)
         if step % temp_step == 0:
