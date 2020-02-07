@@ -72,36 +72,58 @@ def force(X,F):
     for i in prange(Natoms):
         for j in prange(i+1,Natoms):
             # vectorize this
-            solid_distance_x = np.abs(X[i,0]-X[j,0])
-            solid_distance_y = np.abs(X[i,1]-X[j,1])
-            solid_distance_z = np.abs(X[i,2]-X[j,2])
-            delta_x = solid_distance_x - box_sizes[0] * np.floor(solid_distance_x/box_half_sizes[0])
-            delta_y = solid_distance_y - box_sizes[1] * np.floor(solid_distance_y/box_half_sizes[1])
-            delta_z = solid_distance_z - box_sizes[2] * np.floor(solid_distance_z/box_half_sizes[2])
+            delta_x = X[i,0]-X[j,0]
+            delta_y = X[i,1]-X[j,1]
+            delta_z = X[i,2]-X[j,2]
+            delta_x += (-1 * box_sizes[0])*np.trunc(delta_x/box_half_sizes[0])
+            delta_y += (-1 * box_sizes[1])*np.trunc(delta_y/box_half_sizes[1])
+            delta_z += (-1 * box_sizes[2])*np.trunc(delta_z/box_half_sizes[2])
+
             r2 = delta_x**2 + delta_y**2 + delta_z**2
             # what is this
             if np.sqrt(r2)<cutoff:
-                f0= 48*((1.0/r2**7) - 1.0/(2*r2**4))
-                if X[i,0]<X[j,0]:
-                    F[i,0] += -delta_x*f0
-                    F[j,0] += +delta_x*f0
-                else:
-                    F[i,0] += +delta_x*f0
-                    F[j,0] += -delta_x*f0
-                #
-                if X[i,1]<X[j,1]:
-                    F[i,1] += -delta_y*f0
-                    F[j,1] += +delta_y*f0
-                else:
-                    F[i,1] += +delta_y*f0
-                    F[j,1] += -delta_y*f0
-                #
-                if X[i,2]<X[j,2]:
-                    F[i,2] += -delta_x*f0
-                    F[j,2] += +delta_x*f0
-                else:
-                    F[i,2] += +delta_x*f0
-                    F[j,2] += -delta_x*f0
+                f0= 48*(r2**-7 - 0.5*r2**-4)
+                fx = delta_x * f0
+                fy = delta_y * f0
+                fz = delta_z * f0
+                F[i, 0] += fx
+                F[i, 1] += fy
+                F[i, 2] += fz
+
+                F[j, 0] += -fx
+                F[j, 1] += -fy
+                F[j, 2] += -fz
+            # # vectorize this
+            # solid_distance_x = np.abs(X[i,0]-X[j,0])
+            # solid_distance_y = np.abs(X[i,1]-X[j,1])
+            # solid_distance_z = np.abs(X[i,2]-X[j,2])
+            # delta_x = solid_distance_x - box_sizes[0] * np.floor(solid_distance_x/box_half_sizes[0])
+            # delta_y = solid_distance_y - box_sizes[1] * np.floor(solid_distance_y/box_half_sizes[1])
+            # delta_z = solid_distance_z - box_sizes[2] * np.floor(solid_distance_z/box_half_sizes[2])
+            # r2 = delta_x**2 + delta_y**2 + delta_z**2
+            # # what is this
+            # if np.sqrt(r2)<cutoff:
+            #     f0= 48*(r2**-7 - 0.5*r2**-4)
+            #     if X[i,0]<X[j,0]:
+            #         F[i,0] += -delta_x*f0
+            #         F[j,0] += +delta_x*f0
+            #     else:
+            #         F[i,0] += +delta_x*f0
+            #         F[j,0] += -delta_x*f0
+            #     #
+            #     if X[i,1]<X[j,1]:
+            #         F[i,1] += -delta_y*f0
+            #         F[j,1] += +delta_y*f0
+            #     else:
+            #         F[i,1] += +delta_y*f0
+            #         F[j,1] += -delta_y*f0
+            #     #
+            #     if X[i,2]<X[j,2]:
+            #         F[i,2] += -delta_x*f0
+            #         F[j,2] += +delta_x*f0
+            #     else:
+            #         F[i,2] += +delta_x*f0
+            #         F[j,2] += -delta_x*f0
     return F
 
 # needs to be vectorized
@@ -203,6 +225,7 @@ def log(X,V,step):
 ### positioning
 def create_atoms(n_a, n_b, n_c):
     unitcell = bulk('Ar', 'fcc', np.power(2,(2./3)), orthorhombic=True)  # ===>  1.122 sigma
+    # unitcell = bulk('Ar', 'fcc', 5.4, orthorhombic=True)  # ===>  1.122 sigma
     # visualize.view(unitcell)
     # print unitcell.get_cell()
     atoms_a = unitcell
@@ -215,6 +238,7 @@ def create_atoms(n_a, n_b, n_c):
     for k in range(n_c - 1):
         all_atoms = stack(all_atoms, atoms_b, axis=2)
     # print all_atoms.get_cell()
+    print("The cell is= ", all_atoms.get_cell())
     return all_atoms
 ###
 
