@@ -15,29 +15,38 @@ from ase.build import bulk
 #                                                   #
 #####################################################
 Natoms = 0 # will be set, also as global value in premain
-n_a = 2  #Natoms of primitive cell in a direction
-n_b = 2  #Natoms of primitive cell in b direction
-n_c = 1  #Natoms of primitive cell in c direction
+n_a = 5  #Natoms of primitive cell in a direction
+n_b = 5  #Natoms of primitive cell in b direction
+n_c = 5  #Natoms of primitive cell in c direction
 box_sizes = [0,0,0] # from 0 to L in each direction. will be set, also as global value in premain
+box_half_sizes = 0 # will be set, also as global value in premain
 Nsteps = 10**6
-cutoff = 30   #cut off
+cutoff = 300   #cut off
 dump_step = 10
 log_step = 10
 velocity_zeroing_step =100
 dt = 0.0005
-temp_ref = 1 # reference tempreature in Kelvin
+temp_ref = 20 # reference tempreature in Kelvin
 temp_step = 1000000 # thermostat every N steps
-Potential_formula= 'LJ' # 'LJ' or 'Morse'
+################# Potential formula
+Potential_formula= 'Morse' # 'LJ' or 'Morse'
+#################
 kB_true = 1.38064852e-23  #m2 kg s-2 K-1
 if Potential_formula == 'LJ':
     epsilon_true = 1.65e-21  #1.977e-21 #J
     sigma_true = 3.4e-10 #3.348e-10    #m
     mass = 6.6335209e-26  # kg
     tau = (1.0)/np.sqrt(epsilon_true/(mass*sigma_true*sigma_true)) # time unit in second
-    print "time unit is= {0} Seconds\n and timestep={1} femtoseconds".format(tau,tau*dt*1e15)
+    print("time unit is= {0} Seconds\n and timestep={1} femtoseconds".format(tau,tau*dt*1e15))
 if Potential_formula == 'Morse':
-    epsilon_true =0 #J
-    sigma_true = 0   #m
+    D0 =  0.3429 # ev  ## D in Morse potential ## FOR Copper ##
+    r0 =  2.866e-10 # meter
+    alpha = 1.3588e10 # 1/meter
+    # map to LJ units in order to avoid changing the code :)
+    electronvolt_to_joules = 1.60218e-19
+    epsilon_true = D0 * electronvolt_to_joules  #J
+    sigma_true = r0   #meter
+    alphar0 = alpha*r0
 # random_seed = 8
 trajectory_file = "traj.xyz"
 log_file = "output.dat"
@@ -54,6 +63,7 @@ f2 = open(log_file, "a")
 #  kB         1
 #  epsilon    1
 #  sigma      1
+#  mass       1
 
 
 
@@ -64,94 +74,100 @@ def pbc(X):
     return X
 
 # needs refactoring
-@njit(parallel=True)
-def force(X,F):
-    F[:,:] = 0.0
-    box_half_sizes = box_sizes/2
-    # this loop can be vectorized --see numpy documentation
-    for i in prange(Natoms):
-        for j in prange(i+1,Natoms):
-            # vectorize this
-            delta_x = X[i,0]-X[j,0]
-            delta_y = X[i,1]-X[j,1]
-            delta_z = X[i,2]-X[j,2]
-            delta_x += (-1 * box_sizes[0])*np.trunc(delta_x/box_half_sizes[0])
-            delta_y += (-1 * box_sizes[1])*np.trunc(delta_y/box_half_sizes[1])
-            delta_z += (-1 * box_sizes[2])*np.trunc(delta_z/box_half_sizes[2])
+if Potential_formula == 'LJ':
+    @njit(parallel=True)
+    def force(X,F):
+        F[:,:] = 0.0
+        # this loop can be vectorized --see numpy documentation
+        for i in prange(Natoms):
+            for j in prange(i+1,Natoms):
+                # vectorize this
+                delta_x = X[i,0]-X[j,0]
+                delta_y = X[i,1]-X[j,1]
+                delta_z = X[i,2]-X[j,2]
+                delta_x += (-1 * box_sizes[0])*np.trunc(delta_x/box_half_sizes[0])
+                delta_y += (-1 * box_sizes[1])*np.trunc(delta_y/box_half_sizes[1])
+                delta_z += (-1 * box_sizes[2])*np.trunc(delta_z/box_half_sizes[2])
 
-            r2 = delta_x**2 + delta_y**2 + delta_z**2
-            # what is this
-            if np.sqrt(r2)<cutoff:
-                f0= 48*(r2**-7 - 0.5*r2**-4)
-                fx = delta_x * f0
-                fy = delta_y * f0
-                fz = delta_z * f0
-                F[i, 0] += fx
-                F[i, 1] += fy
-                F[i, 2] += fz
+                r2 = delta_x**2 + delta_y**2 + delta_z**2
+                if np.sqrt(r2)<cutoff:
+                    f0= 48*(r2**-7 - 0.5*r2**-4)
+                    fx = delta_x * f0
+                    fy = delta_y * f0
+                    fz = delta_z * f0
+                    F[i, 0] += fx
+                    F[i, 1] += fy
+                    F[i, 2] += fz
 
-                F[j, 0] += -fx
-                F[j, 1] += -fy
-                F[j, 2] += -fz
-            # # vectorize this
-            # solid_distance_x = np.abs(X[i,0]-X[j,0])
-            # solid_distance_y = np.abs(X[i,1]-X[j,1])
-            # solid_distance_z = np.abs(X[i,2]-X[j,2])
-            # delta_x = solid_distance_x - box_sizes[0] * np.floor(solid_distance_x/box_half_sizes[0])
-            # delta_y = solid_distance_y - box_sizes[1] * np.floor(solid_distance_y/box_half_sizes[1])
-            # delta_z = solid_distance_z - box_sizes[2] * np.floor(solid_distance_z/box_half_sizes[2])
-            # r2 = delta_x**2 + delta_y**2 + delta_z**2
-            # # what is this
-            # if np.sqrt(r2)<cutoff:
-            #     f0= 48*(r2**-7 - 0.5*r2**-4)
-            #     if X[i,0]<X[j,0]:
-            #         F[i,0] += -delta_x*f0
-            #         F[j,0] += +delta_x*f0
-            #     else:
-            #         F[i,0] += +delta_x*f0
-            #         F[j,0] += -delta_x*f0
-            #     #
-            #     if X[i,1]<X[j,1]:
-            #         F[i,1] += -delta_y*f0
-            #         F[j,1] += +delta_y*f0
-            #     else:
-            #         F[i,1] += +delta_y*f0
-            #         F[j,1] += -delta_y*f0
-            #     #
-            #     if X[i,2]<X[j,2]:
-            #         F[i,2] += -delta_x*f0
-            #         F[j,2] += +delta_x*f0
-            #     else:
-            #         F[i,2] += +delta_x*f0
-            #         F[j,2] += -delta_x*f0
-    return F
+                    F[j, 0] += -fx
+                    F[j, 1] += -fy
+                    F[j, 2] += -fz
+        return F
+elif Potential_formula == 'Morse':
+    @njit(parallel=True)
+    def force(X, F):
+        F[:, :] = 0.0
+        # this loop can be vectorized --see numpy documentation
+        for i in prange(Natoms):
+            for j in prange(i + 1, Natoms):
+                # vectorize this
+                delta_x = X[i, 0] - X[j, 0]
+                delta_y = X[i, 1] - X[j, 1]
+                delta_z = X[i, 2] - X[j, 2]
+                delta_x += (-1 * box_sizes[0]) * np.trunc(delta_x / box_half_sizes[0])
+                delta_y += (-1 * box_sizes[1]) * np.trunc(delta_y / box_half_sizes[1])
+                delta_z += (-1 * box_sizes[2]) * np.trunc(delta_z / box_half_sizes[2])
+
+                r = np.sqrt(delta_x ** 2 + delta_y ** 2 + delta_z ** 2)
+                if r < cutoff:
+                    f0 = 2*alphar0 * (np.exp(-2*alphar0*(r-1)) - np.exp(-1*alphar0*(r-1))) * (1.0/r)
+                    fx = delta_x * f0
+                    fy = delta_y * f0
+                    fz = delta_z * f0
+                    F[i, 0] += fx
+                    F[i, 1] += fy
+                    F[i, 2] += fz
+
+                    F[j, 0] += -fx
+                    F[j, 1] += -fy
+                    F[j, 2] += -fz
+        return F
 
 # needs to be vectorized
-@njit(parallel=False)
-def potential_energy(X):
-    E = 0
-    for i in range(Natoms):
-        for j in range(i+1,Natoms):
-            if np.abs(X[i,0]-X[j,0]) > box_sizes[0]/2:
-                delta_x = box_sizes[0] - np.abs(X[i,0]-X[j,0])
-            else:
-                delta_x = np.abs(X[i,0]-X[j,0])
+if Potential_formula == 'LJ':
+    @njit(parallel=False)
+    def potential_energy(X):
+        E = 0
+        for i in range(Natoms):
+            for j in range(i+1,Natoms):
+                delta_x = X[i,0]-X[j,0]
+                delta_y = X[i,1]-X[j,1]
+                delta_z = X[i,2]-X[j,2]
+                delta_x += (-1 * box_sizes[0])*np.trunc(delta_x/box_half_sizes[0])
+                delta_y += (-1 * box_sizes[1])*np.trunc(delta_y/box_half_sizes[1])
+                delta_z += (-1 * box_sizes[2])*np.trunc(delta_z/box_half_sizes[2])
 
-            if np.abs(X[i,1]-X[j,1]) > box_sizes[1]/2:
-                delta_y = box_sizes[1] - np.abs(X[i,1]-X[j,1])
-            else:
-                delta_y = np.abs(X[i,1]-X[j,1])
-            
-            if np.abs(X[i,2]-X[j,2]) > box_sizes[2]/2:
-                delta_z = box_sizes[2] - np.abs(X[i,2]-X[j,2])
-            else:
-                delta_z = np.abs(X[i,2]-X[j,2])
+                r = np.sqrt(delta_x**2 + delta_y**2 + delta_z**2)
+                if r<cutoff:
+                    E += 4 * ( r**-12 - r**-6)
+        return E
+elif Potential_formula == 'Morse':
+    @njit(parallel=False)
+    def potential_energy(X):
+        E = 0
+        for i in range(Natoms):
+            for j in range(i + 1, Natoms):
+                delta_x = X[i, 0] - X[j, 0]
+                delta_y = X[i, 1] - X[j, 1]
+                delta_z = X[i, 2] - X[j, 2]
+                delta_x += (-1 * box_sizes[0]) * np.trunc(delta_x / box_half_sizes[0])
+                delta_y += (-1 * box_sizes[1]) * np.trunc(delta_y / box_half_sizes[1])
+                delta_z += (-1 * box_sizes[2]) * np.trunc(delta_z / box_half_sizes[2])
 
-            r = np.sqrt(delta_x**2 + delta_y**2 + delta_z**2)
-            if r<cutoff:
-                E += 4 * ( r**-12 - r**-6)
-    return E
-
+                r = np.sqrt(delta_x ** 2 + delta_y ** 2 + delta_z ** 2)
+                if r < cutoff:
+                    E += (np.exp(-2*alphar0 * (r - 1)) - 2 * np.exp(-1 * alphar0*(r - 1)))
+        return E
 
 def kinetic_energy(V):
     # is this ok?  YES
@@ -213,7 +229,7 @@ def log(X,V,step):
     E_tot = E_kin+E_pot
     temp_now = temperature(V)*temp_true
     log_output = np.array([step,E_kin,E_pot,E_tot,temp_now])
-    print(log_output)
+    print(step,temp_now)
     f2.write("\t".join([str(a) for a in log_output])+"\n")
     # np.savetxt(f2, log_output,fmt=('%i','%.8f','%.8f','%.8f','%.8f'))
     return None
@@ -224,8 +240,8 @@ def log(X,V,step):
 
 ### positioning
 def create_atoms(n_a, n_b, n_c):
-    unitcell = bulk('Ar', 'fcc', np.power(2,(2./3)), orthorhombic=True)  # ===>  1.122 sigma
-    # unitcell = bulk('Ar', 'fcc', 5.4, orthorhombic=True)  # ===>  1.122 sigma
+    unitcell = bulk('Ar', 'fcc', np.power(2,(2./3)), orthorhombic=True)  # ===>  1.122 sigma (from geometry)
+    # unitcell = bulk('Ar', 'fcc', 5.4, orthorhombic=True)
     # visualize.view(unitcell)
     # print unitcell.get_cell()
     atoms_a = unitcell
@@ -261,10 +277,11 @@ def pre_main():
     atoms = create_atoms(n_a, n_b, n_c)
     global Natoms
     global box_sizes
+    global box_half_sizes
     Natoms = atoms.get_number_of_atoms()
     print('total number of atoms=', Natoms)
     box_sizes = np.array([atoms.get_cell()[0][0],   atoms.get_cell()[1][1],  atoms.get_cell()[2][2] ] )
-
+    box_half_sizes = box_sizes / 2
     # initialize positions, velocities and forces
     X = atoms.get_positions()
     # X = np.zeros((Natoms,3))
