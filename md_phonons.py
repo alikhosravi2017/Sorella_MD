@@ -9,6 +9,8 @@ plt.style.use('ggplot')
 k_B = 1
 trajectory_file = "traj.xyz"
 
+
+
 # notation
 # l,l' -> refers to the unit cell in the supercell
 # k,k' -> runs over all Natoms
@@ -24,6 +26,7 @@ r_l = np.dot(l,cell)
 def read_xyz(pos=trajectory_file):
 	""" Reads .xyz file and create a frame-indexed trajectory array."""
 	with open(pos,"r") as f:
+		Natoms,Nframes = 0,0
 		lines = f.readlines()
 		frame = 0
 		k = 0
@@ -45,7 +48,7 @@ def read_xyz(pos=trajectory_file):
 				if counter==(Natoms+2):
 					counter = 0
 					frame += 1
-	return traj
+	return traj,Natoms,Nframes
 
 
 # @njit()
@@ -90,18 +93,40 @@ def greens_func(traj):
 	wave vector q."""
 	# Nframes = G.shape[0]
 	# Natoms = G.shape[1]
-	R_ka = np.mean(traj,axis=0) # average over all frames
+	# R_ka = np.mean(traj,axis=0) # average over all frames
 
-	Natoms = R_ka.shape[0]
-	G_ft = np.zeros((Natoms,3,Natoms,3)) # ka, k'b
-	print(G_ft.shape)
+	# Natoms = R_ka.shape[0]
+	G_ft = np.zeros((Natoms,3,Natoms,3),dtype='complex128') # ka, k'b
+	# print("G shape",G_ft.shape)
 
+	# Rsum 
+	Rsum = np.mean(traj,axis=0)
+
+	# Rqsum
+	Rq = np.fft.fftn(traj)
+	# print("Rq shape",Rq.shape)
+
+	# add 2nd term to G
 	for k1 in range(Natoms):
 		for k2 in range(Natoms):
 			for a in range(3):
 				for b in range(3):
-					G_ft[k1,a,k2,b] = np.fft.fft(R_ka[k1,a]*R_ka[k2,b])#-np.fft.fft(R_ka[k1,a])*np.fft.fft(R_ka[k2,b])
+					G_ft[k1,a,k2,b] -= np.mean(Rq[:,k1,a]*np.conj(Rq[:,k2,b]),axis=0)
 
+
+	# sum(Rq.Rq)
+	sumRkRk = np.zeros(G_ft.shape)
+	for k1 in range(Natoms):
+		for k2 in range(Natoms):
+			for a in range(3):
+				for b in range(3):
+					sumRkRk[k1,a,k2,b] = np.dot(Rsum[k1,a],np.conj(Rsum[k2,b]))
+	sumRqRq = np.fft.fftn(sumRkRk)
+
+	# add first term to G
+	G_ft += sumRqRq
+
+	# to be removed
 	# R_ka_kb = R_ka*R_kb
 	# R_ka_ft = np.fft.fft(R_ka)
 	# R_kb_ft = np.conj(np.fft.fft(R_kb))
@@ -114,24 +139,36 @@ def greens_func(traj):
 # @njit()
 def force_constants(G,T=20):
 	""" Calculates force constants $\Phi_{lk\alpha,l'k'\beta}$ """
-	phi = k_B * T* np.linalg.inv(G,axes=(0,2))
+	phi = np.zeros(np.shape(G))
+
+	# check if G is hermitian 
+	# !! PROBLEM should check for all atoms separately
+	if (np.conj(G)==G).all(): # check if G is hermitian 
+		print("Matrix is Hermitian")
+	else:
+		print("Matrix is NOT Hermitian\n",np.conj(G)==G)
+	# 	phi = k_B * T* G
+	# else:
+	for k1 in range(Natoms):
+		for k2 in range(Natoms):
+			print("G shape {} {} |".format(k1,k2),G[k1,:,k2,:].shape)
+			phi[k1,:,k2,:] = k_B * T* np.linalg.inv(G[k1,:,k2,:])
 	return phi
 
 def eigenfreqs(traj,M=1):
 	G_ft = greens_func(traj)
 	# print(G_ft.shape)
 	# phi_ft = force_constants(G_ft)
-	phi_ft = np.zeros(G_ft.shape)
-	# print(G_ft.shape)
-	for k in range(G_ft.shape[0]):
-		for a in range(G_ft.shape[1]):
-			phi_ft[k,a] = force_constants(G_ft[k,a])
+	phi_ft = force_constants(G_ft)
+	D = np.zeros(phi_ft.shape)
 	D = 1/np.sqrt(M)* phi_ft
 	omega = np.linalg.eig(D)
 	return np.sqrt(omega)
 
 
 def main():
+	global Natoms
+	global Nframes
 	a = 1. # lattice constant
 	# high symmetry points for fcc Gamma -> X -> W -> K -> Gamma -> L
 	gamma = np.array([0,0,0])
@@ -148,7 +185,8 @@ def main():
 
 	fig = plt.figure()
 	ax = fig.add_subplot(111, projection='3d')
-	traj = read_xyz()[:,:,1:]
+	traj,Natoms,Nframes = read_xyz()
+	traj = traj[:,:,1:]
 
 	# Gf=greens_func(traj)
 	freqs = eigenfreqs(traj)
