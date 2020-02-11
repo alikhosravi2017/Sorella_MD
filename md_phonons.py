@@ -2,7 +2,7 @@
 import numpy as np
 from mpl_toolkits.mplot3d import Axes3D 
 import matplotlib.pyplot as plt
-from numba import njit
+from numba import njit,prange
 plt.style.use('ggplot')
 
 # parameters
@@ -108,10 +108,10 @@ def greens_func(traj):
 	# print("Rq shape",Rq.shape)
 
 	# add 2nd term to G
-	for k1 in range(Natoms):
-		for k2 in range(Natoms):
-			for a in range(3):
-				for b in range(3):
+	for k1 in prange(Natoms):
+		for k2 in prange(Natoms):
+			for a in prange(3):
+				for b in prange(3):
 					G_ft[k1,a,k2,b] -= np.mean(Rq[:,k1,a]*np.conj(Rq[:,k2,b]),axis=0)
 
 
@@ -131,10 +131,10 @@ def greens_func(traj):
 	Rqsum = np.fft.fftn(Rsum)
 	# print np.shape(Rsum), np.shape(Rq), np.shape(Rqsum), np.shape(traj), np.shape(Rqsum)
 	# sumRkRk = np.zeros(G_ft.shape)
-	for k1 in range(Natoms):
-		for k2 in range(Natoms):
-			for a in range(3):
-				for b in range(3):
+	for k1 in prange(Natoms):
+		for k2 in prange(Natoms):
+			for a in prange(3):
+				for b in prange(3):
 					G_ft[k1,a,k2,b] +=  Rqsum[k1,a]*np.conj(Rqsum[k2,b])
 	# sumRqRq = np.fft.fftn(sumRkRk)
 
@@ -155,31 +155,43 @@ def greens_func(traj):
 # @njit()
 def force_constants(G,T=20):
 	""" Calculates force constants $\Phi_{lk\alpha,l'k'\beta}$ """
-	phi = np.zeros(np.shape(G))
+	# phi = np.zeros(np.shape(G))
 
 	# check if G is hermitian 
 	# !! PROBLEM should check for all atoms separately
-	if (np.conj(G)==G).all(): # check if G is hermitian 
-		print("Matrix is Hermitian")
-	else:
-		print("Matrix is NOT Hermitian\n",np.conj(G)==G)
+	# if (np.conj(G)==G).all(): # check if G is hermitian 
+		# print("Matrix is Hermitian")
+	# else:
+		# print("Matrix is NOT Hermitian\n",np.conj(G)==G)
 	# 	phi = k_B * T* G
 	# else:
-	for k1 in range(Natoms):
-		for k2 in range(Natoms):
-			print("G shape {} {} |".format(k1,k2),G[k1,:,k2,:].shape)
-			phi[k1,:,k2,:] = k_B * T* np.linalg.inv(G[k1,:,k2,:])
-	return phi
 
-def eigenfreqs(traj,M=1):
+	# for k1 in range(Natoms):
+	# 	for k2 in range(Natoms):
+	# 		for a in range(3):
+	# 			for b in range(3):
+	# 				print("G shape atom_i ={} atom_j={} |".format(k1,k2),G[k1,:,k2,:].shape)
+	# 				print("== ==\n",G[k1,:,k2,:],np.conj(G[k1,:,k2,:].T))
+	# 		phi[k1,:,k2,:] = k_B * T* np.linalg.inv(G[k1,:,k2,:])
+	return G
+
+
+def eigenfreqs(traj,M=1.):
 	G_ft = greens_func(traj)
 	# print(G_ft.shape)
 	# phi_ft = force_constants(G_ft)
 	phi_ft = force_constants(G_ft)
 	D = np.zeros(phi_ft.shape)
 	D = 1/np.sqrt(M)* phi_ft
-	omega = np.linalg.eig(D)
-	return np.sqrt(omega)
+	omega_sq = np.zeros((Natoms,3),dtype='float64')
+	for k1 in prange(Natoms):
+		for k2 in prange(Natoms):
+			# print(D[k1,:,k2,:].shape)
+			# print(np.linalg.eig(D[k1,:,k2,:]))
+			eigenvals,eigenvecs = np.linalg.eigh(D[k1,:,k2,:])
+			print("== EIGENVALUES ==\n",eigenvals)
+			omega_sq[k1,:] = eigenvals
+	return np.sqrt(omega_sq)
 
 
 def main():
@@ -206,6 +218,7 @@ def main():
 
 	# Gf=greens_func(traj)
 	freqs = eigenfreqs(traj)
+	print(" == FREQUENCIES (omega(q)) ==\n",freqs)
 	# ax.scatter(freqs[:,0],freqs[:,1],freqs[:,2])
 	# plt.show()
 
