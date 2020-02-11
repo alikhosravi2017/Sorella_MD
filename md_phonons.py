@@ -104,6 +104,7 @@ def greens_func(traj):
 
 	# Rqsum
 	Rq = np.fft.fftn(traj)
+
 	# print("Rq shape",Rq.shape)
 
 	# add 2nd term to G
@@ -114,17 +115,32 @@ def greens_func(traj):
 					G_ft[k1,a,k2,b] -= np.mean(Rq[:,k1,a]*np.conj(Rq[:,k2,b]),axis=0)
 
 
-	# sum(Rq.Rq)
-	sumRkRk = np.zeros(G_ft.shape)
+	# sum(R.R)(q)
+	# sumRkRk = np.zeros(G_ft.shape)
+	# for k1 in range(Natoms):
+	# 	for k2 in range(Natoms):
+	# 		for a in range(3):
+	# 			for b in range(3):
+	# 				sumRkRk[k1,a,k2,b] = np.dot(Rsum[k1,a],np.conj(Rsum[k2,b]))
+	# sumRqRq = np.fft.fftn(sumRkRk)
+	# add first term to G
+	# G_ft += sumRqRq
+
+
+	# shouldn't be like this?
+	Rqsum = np.fft.fftn(Rsum)
+	# print np.shape(Rsum), np.shape(Rq), np.shape(Rqsum), np.shape(traj), np.shape(Rqsum)
+	# sumRkRk = np.zeros(G_ft.shape)
 	for k1 in range(Natoms):
 		for k2 in range(Natoms):
 			for a in range(3):
 				for b in range(3):
-					sumRkRk[k1,a,k2,b] = np.dot(Rsum[k1,a],np.conj(Rsum[k2,b]))
-	sumRqRq = np.fft.fftn(sumRkRk)
+					G_ft[k1,a,k2,b] +=  Rqsum[k1,a]*np.conj(Rqsum[k2,b])
+	# sumRqRq = np.fft.fftn(sumRkRk)
 
-	# add first term to G
-	G_ft += sumRqRq
+
+
+
 
 	# to be removed
 	# R_ka_kb = R_ka*R_kb
