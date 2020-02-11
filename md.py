@@ -15,21 +15,22 @@ from ase.build import bulk
 #                                                   #
 #####################################################
 Natoms = 0 # will be set, also as global value in premain
-n_a = 5  #Natoms of primitive cell in a direction
-n_b = 5  #Natoms of primitive cell in b direction
-n_c = 5  #Natoms of primitive cell in c direction
+X0=0
+n_a = 3  #Natoms of primitive cell in a direction
+n_b = 3  #Natoms of primitive cell in b direction
+n_c = 3  #Natoms of primitive cell in c direction
 box_sizes = [0,0,0] # from 0 to L in each direction. will be set, also as global value in premain
 box_half_sizes = 0 # will be set, also as global value in premain
-Nsteps = 10**6
+Nsteps = 10**3
 cutoff = 300   #cut off
-dump_step = 10
+dump_step = 100
 log_step = 10
 velocity_zeroing_step =100
 dt = 0.0005
 temp_ref = 20 # reference tempreature in Kelvin
-temp_step = 1000000 # thermostat every N steps
+temp_step = 100 # thermostat every N steps
 ################# Potential formula
-Potential_formula= 'Morse' # 'LJ' or 'Morse'
+Potential_formula= 'LJ' # 'LJ' or 'Morse'
 #################
 kB_true = 1.38064852e-23  #m2 kg s-2 K-1
 if Potential_formula == 'LJ':
@@ -49,6 +50,7 @@ if Potential_formula == 'Morse':
     alphar0 = alpha*r0
 # random_seed = 8
 trajectory_file = "traj.xyz"
+trajectory_file_unwrapped = "traj_unwrapped.xyz"
 log_file = "output.dat"
 
 
@@ -56,9 +58,11 @@ np.random.seed(4)
 
 try:
     os.remove(trajectory_file)
+    os.remove(trajectory_file_unwrapped)
     os.remove(log_file)
 except OSError: pass
 f = open(trajectory_file, "ab")
+f3 = open(trajectory_file_unwrapped, "ab")
 f2 = open(log_file, "a")
 #  kB         1
 #  epsilon    1
@@ -217,7 +221,26 @@ def dump_xyz(X,step):
     f.write(str(Natoms).encode())
     f.write(b"\n atoms\n")
     np.savetxt(f, xyz,fmt=('%i','%.8f','%.8f','%.8f'))
+
+    dump_xyz_unwrapped(X, step)
     return None
+
+
+def dump_xyz_unwrapped(X,step):
+    X_unwrapped = np.copy(X)
+    displacement_M = X-X0
+    X_unwrapped[:,0] += (-1 * box_sizes[0]) * np.trunc(displacement_M[:,0] / box_half_sizes[0])
+    X_unwrapped[:,1] += (-1 * box_sizes[1]) * np.trunc(displacement_M[:,1] / box_half_sizes[1])
+    X_unwrapped[:,2] += (-1 * box_sizes[2]) * np.trunc(displacement_M[:,2] / box_half_sizes[2])
+
+    atom_types = Natoms*[1]
+    xyz = np.array([atom_types,X_unwrapped[:,0],X_unwrapped[:,1],X_unwrapped[:,2]]).T
+
+    f3.write(str(Natoms).encode())
+    f3.write(b"\n atoms\n")
+    np.savetxt(f3, xyz,fmt=('%i','%.8f','%.8f','%.8f'))
+    return None
+
 
 def log(X,V,step):
     if step%log_step!=0:
@@ -233,26 +256,6 @@ def log(X,V,step):
     f2.write("\t".join([str(a) for a in log_output])+"\n")
     # np.savetxt(f2, log_output,fmt=('%i','%.8f','%.8f','%.8f','%.8f'))
     return None
-
-
-from ase import visualize
-from ase.build import stack
-from ase.io import write
-import numpy as np
-# Ars= Atoms(bulk, size=(10,10,10))
-from ase.build import bulk
-
-def create_atoms(n_a,n_b,n_c):
-	unitcell = bulk('Ar', 'fcc', 1.5, orthorhombic=True)  # ===> epsilon unit
-	atoms_a = unitcell
-	for i in range(n_a - 1):
-		atoms_a = stack(atoms_a, unitcell, axis=0)
-	atoms_b = atoms_a
-	for j in range(n_b - 1):
-		atoms_b = stack(atoms_b, atoms_a, axis=1)
-	all_atoms = atoms_b
-	for k in range(n_c - 1):
-		all_atoms = stack(all_atoms, atoms_b, axis=2)
 
 #Forces = np.zeros((Natoms,3,2)) # why a tensor?
 # KEnergy = np.zeros((Natoms,2))
@@ -298,12 +301,15 @@ def pre_main():
     global Natoms
     global box_sizes
     global box_half_sizes
+    global X0
     Natoms = atoms.get_number_of_atoms()
     print('total number of atoms=', Natoms)
     box_sizes = np.array([atoms.get_cell()[0][0],   atoms.get_cell()[1][1],  atoms.get_cell()[2][2] ] )
     box_half_sizes = box_sizes / 2
     # initialize positions, velocities and forces
     X = atoms.get_positions()
+    X0 = np.copy(X)
+
     # X = np.zeros((Natoms,3))
     V = np.zeros((Natoms,3))
     F = np.zeros((Natoms,3))
