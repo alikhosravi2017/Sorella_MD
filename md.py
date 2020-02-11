@@ -201,6 +201,26 @@ def log(X,V,step,fname):
 	# np.savetxt(f2, log_output,fmt=('%i','%.8f','%.8f','%.8f','%.8f'))
 	return None
 
+
+from ase import visualize
+from ase.build import stack
+from ase.io import write
+import numpy as np
+# Ars= Atoms(bulk, size=(10,10,10))
+from ase.build import bulk
+
+def create_atoms(n_a,n_b,n_c):
+	unitcell = bulk('Ar', 'fcc', 1.5, orthorhombic=True)  # ===> epsilon unit
+	atoms_a = unitcell
+	for i in range(n_a - 1):
+		atoms_a = stack(atoms_a, unitcell, axis=0)
+	atoms_b = atoms_a
+	for j in range(n_b - 1):
+		atoms_b = stack(atoms_b, atoms_a, axis=1)
+	all_atoms = atoms_b
+	for k in range(n_c - 1):
+		all_atoms = stack(all_atoms, atoms_b, axis=2)
+
 #Forces = np.zeros((Natoms,3,2)) # why a tensor?
 # KEnergy = np.zeros((Natoms,2))
 # PEnergy = np.zeros((Natoms,2))
