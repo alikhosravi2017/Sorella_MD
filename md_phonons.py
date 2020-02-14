@@ -7,7 +7,7 @@ plt.style.use('ggplot')
 
 # parameters
 k_B = 1
-trajectory_file = "traj.xyz"
+trajectory_file = "traj_unwrapped.xyz"
 
 
 
