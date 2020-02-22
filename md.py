@@ -21,7 +21,7 @@ n_b = 3  #Natoms of primitive cell in b direction
 n_c = 3  #Natoms of primitive cell in c direction
 box_sizes = [0,0,0] # from 0 to L in each direction. will be set, also as global value in premain
 box_half_sizes = 0 # will be set, also as global value in premain
-Nsteps = 10**3
+Nsteps = 10**4
 cutoff = 300   #cut off
 dump_step = 100
 log_step = 10
@@ -30,7 +30,7 @@ dt = 0.0005
 temp_ref = 20 # reference tempreature in Kelvin
 temp_step = 100 # thermostat every N steps
 ################# Potential formula
-Potential_formula= 'LJ' # 'LJ' or 'Morse'
+Potential_formula= 'Morse' # 'LJ' or 'Morse'
 #################
 kB_true = 1.38064852e-23  #m2 kg s-2 K-1
 if Potential_formula == 'LJ':
@@ -124,7 +124,7 @@ elif Potential_formula == 'Morse':
 
                 r = np.sqrt(delta_x ** 2 + delta_y ** 2 + delta_z ** 2)
                 if r < cutoff:
-                    f0 = 2*alphar0 * (np.exp(-2*alphar0*(r-1)) - np.exp(-1*alphar0*(r-1))) * (1.0/r)
+                    f0 = -2*alphar0 * (np.exp(-2*alphar0*(r-1)) - 2*alphar0*np.exp(-alphar0*(r-1))) 
                     fx = delta_x * f0
                     fy = delta_y * f0
                     fz = delta_z * f0
@@ -170,7 +170,7 @@ elif Potential_formula == 'Morse':
 
                 r = np.sqrt(delta_x ** 2 + delta_y ** 2 + delta_z ** 2)
                 if r < cutoff:
-                    E += (np.exp(-2*alphar0 * (r - 1)) - 2 * np.exp(-1 * alphar0*(r - 1)))
+                    E += np.exp(-2*alphar0 * (r - 1)) - 2 * np.exp(-alphar0*(r - 1))
         return E
 
 def kinetic_energy(V):
@@ -252,7 +252,7 @@ def log(X,V,step):
     E_tot = E_kin+E_pot
     temp_now = temperature(V)*temp_true
     log_output = np.array([step,E_kin,E_pot,E_tot,temp_now])
-    print(step,temp_now)
+    #print(step,temp_now)
     f2.write("\t".join([str(a) for a in log_output])+"\n")
     # np.savetxt(f2, log_output,fmt=('%i','%.8f','%.8f','%.8f','%.8f'))
     return None
