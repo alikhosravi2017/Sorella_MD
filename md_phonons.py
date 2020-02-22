@@ -55,6 +55,7 @@ def read_xyz(pos=trajectory_file):
 def equidist(p1, p2, npoints=20):
 	""" Creates an array of equidistant points between two N-dim points."""
 	temp = np.zeros((npoints,p1.shape[0]))
+	# loop over x,y,z dimensions
 	for i in range(p1.shape[0]):
 		temp[:,i] = np.linspace(p1[i],p2[i],npoints)
 	return temp
@@ -62,15 +63,16 @@ def equidist(p1, p2, npoints=20):
 # @njit()
 def highsymm_path(symm_points,npoints=200):
 	""" Generates high symmetry path 
-	along the given points.
-	a -> lattice constant"""
-	# symm_points = np.array(symm_points)
+	along the given points."""
+
 	path = np.zeros((npoints*(symm_points.shape[0]-1),symm_points.shape[1]))
 
+	# loop over each high symm point
 	for i in range(len(symm_points)-1):
 		temp = equidist(symm_points[i],symm_points[i+1],npoints)
 		# print(temp.shape)
 		z = 0
+		# loop over each sample point along the path
 		for j in range(i*npoints,(i+1)*npoints):
 			path[j,:] = temp[z,:]
 			z += 1
@@ -85,6 +87,17 @@ def highsymm_path(symm_points,npoints=200):
 
 	return path
 
+
+def plot_disp(bands):
+	""" Plots phonon dispersion.
+	bands shape: No. bands x No. path points x No. dimensions"""
+	x = np.arange(0,bands.shape[1])
+	for band_i in range(bands.shape[0]):
+		en = bands[band_i,:,0]
+		plt.plot(x,en)
+	plt.show()
+#	plt.savefig('phonon_dispersion.pdf')
+	return None
 
 # @njit()
 def greens_func(traj):
@@ -205,22 +218,27 @@ def main():
 	K =  np.array([3*np.pi/(2*a),3*np.pi/(2*a),0])
 	L = np.array([np.pi/a,np.pi/a,np.pi/a])	
 	pt = highsymm_path(np.array([gamma,X,W,K,gamma,L]))
-	# plt.plot(pt,"-.")
-	# plt.legend(["1/x","1/y","1/z"])
-	# plt.show()
+	plt.plot(pt,"-.")
+	plt.legend(["1/x","1/y","1/z"])
+	plt.show()
 
 
-
-	fig = plt.figure()
-	ax = fig.add_subplot(111, projection='3d')
 	traj,Natoms,Nframes = read_xyz()
 	traj = traj[:,:,1:]
 
-	# Gf=greens_func(traj)
+
+	# EXPECTED WORKFLOW
+	# inputs: 
+	#	trajectory (variable: traj, shape: No. frames x No. atoms x 3)
+	# 	high symmetry path (variable: pt, shape: No. path points x 3)
+	# output: 
+	#	eigenfrequencies (shape: No. eigenfrequencies x No. path points x 3)
+
+	# plot_disp(eigenfrequencies
+
+	# this needs to be changed 
 	freqs = eigenfreqs(traj)
 	print(" == FREQUENCIES (omega(q)) ==\n",freqs)
-	# ax.scatter(freqs[:,0],freqs[:,1],freqs[:,2])
-	# plt.show()
 
 	return None
 
