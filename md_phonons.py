@@ -7,6 +7,7 @@ plt.style.use('ggplot')
 
 # parameters
 k_B = 1
+T =1
 trajectory_file = "traj_unwrapped.xyz"
 
 
@@ -99,8 +100,28 @@ def plot_disp(bands):
 #	plt.savefig('phonon_dispersion.pdf')
 	return None
 
+
+def FT(POS,pt):
+	'''
+	Calculate Fourier transform of position. ONLY for 1 FRAME
+	:param traj: in this dimension: POS[natom,3]
+	:param pt: high symmetry path
+	:return:
+	'''
+	kir = np.zeros((len(pt),3))
+	if len(POS.shape) == 2:
+		for ii in range(len(pt)):
+			qq = pt[ii]
+			exponential = np.exp(-1j * np.sum(qq * POS, axis=1))
+			kir[ii,0] = Natoms_root_rev*np.sum( POS[:,0] * exponential )
+			kir[ii,1] = Natoms_root_rev*np.sum( POS[:,1] * exponential )
+			kir[ii,2] = Natoms_root_rev*np.sum( POS[:,2] * exponential )
+	else:   raise ValueError
+	return kir
+
+
 # @njit()
-def greens_func(traj):
+def greens_func(traj,pt):
 	"""	Takes the Fourier transform of the absolute positions for a given vector.
 	Averages all frames and calculates the FT Green's function coeffs at each 
 	wave vector q."""
@@ -108,65 +129,34 @@ def greens_func(traj):
 	# Natoms = G.shape[1]
 	# R_ka = np.mean(traj,axis=0) # average over all frames
 
-	# Natoms = R_ka.shape[0]
-	G_ft = np.zeros((Natoms,3,Natoms,3),dtype='complex128') # ka, k'b
+	G_ft = np.zeros((len(pt),3,3),dtype='complex128') # ka, k'b
 	# print("G shape",G_ft.shape)
 
-	# Rsum 
-	Rsum = np.mean(traj,axis=0)
+	# For first term
+	for fram in range(Nframes):
+		Rq      =  FT(traj[fram],pt)
+		Rq_star =  np.conj(Rq)
+		for qq in range(len(pt)):
+			for alpha in range(3):
+				for beta in range(3):
+					G_ft[qq,alpha,beta]+= Rq[qq,:,alpha]*Rq_star[qq,:,beta]
+	G_ft*(1.0/Nframes)
 
-	# Rqsum
-	Rq = np.fft.fftn(traj)
-
-	# print("Rq shape",Rq.shape)
-
-	# add 2nd term to G
-	for k1 in prange(Natoms):
-		for k2 in prange(Natoms):
-			for a in prange(3):
-				for b in prange(3):
-					G_ft[k1,a,k2,b] -= np.mean(Rq[:,k1,a]*np.conj(Rq[:,k2,b]),axis=0)
-
-
-	# sum(R.R)(q)
-	# sumRkRk = np.zeros(G_ft.shape)
-	# for k1 in range(Natoms):
-	# 	for k2 in range(Natoms):
-	# 		for a in range(3):
-	# 			for b in range(3):
-	# 				sumRkRk[k1,a,k2,b] = np.dot(Rsum[k1,a],np.conj(Rsum[k2,b]))
-	# sumRqRq = np.fft.fftn(sumRkRk)
-	# add first term to G
-	# G_ft += sumRqRq
+	# For Second term
+	R_mean = np.mean(traj,axis=0)
+	R_mean_q = FT(R_mean,pt)
+	R_mean_q_star = np.conj(R_mean_q)
+	for qq in range(len(pt)):
+		for alpha in range(3):
+			for beta in range(3):
+				G_ft[qq,alpha, beta] -= R_mean_q[qq,:, alpha] * R_mean_q_star[qq,:, beta]
 
 
-	# shouldn't be like this?
-	Rqsum = np.fft.fftn(Rsum)
-	# print np.shape(Rsum), np.shape(Rq), np.shape(Rqsum), np.shape(traj), np.shape(Rqsum)
-	# sumRkRk = np.zeros(G_ft.shape)
-	for k1 in prange(Natoms):
-		for k2 in prange(Natoms):
-			for a in prange(3):
-				for b in prange(3):
-					G_ft[k1,a,k2,b] +=  Rqsum[k1,a]*np.conj(Rqsum[k2,b])
-	# sumRqRq = np.fft.fftn(sumRkRk)
-
-
-
-
-
-	# to be removed
-	# R_ka_kb = R_ka*R_kb
-	# R_ka_ft = np.fft.fft(R_ka)
-	# R_kb_ft = np.conj(np.fft.fft(R_kb))
-	# R_ka_kb_ft = np.fft.fft(R_ka*R_kb)
-	# G_ft = np.zeros((Natoms,3,Natoms,3)) # ka, k'b
-	# G_ft = R_ka_kb_ft-R_ka_ft*R_kb_ft
-	print(G_ft.shape)
+	print("G_ft.shape=",G_ft.shape)
 	return G_ft
 
 # @njit()
-def force_constants(G,T=20):
+def force_constants(G,pt):
 	""" Calculates force constants $\Phi_{lk\alpha,l'k'\beta}$ """
 	# phi = np.zeros(np.shape(G))
 
@@ -186,29 +176,33 @@ def force_constants(G,T=20):
 	# 				print("G shape atom_i ={} atom_j={} |".format(k1,k2),G[k1,:,k2,:].shape)
 	# 				print("== ==\n",G[k1,:,k2,:],np.conj(G[k1,:,k2,:].T))
 	# 		phi[k1,:,k2,:] = k_B * T* np.linalg.inv(G[k1,:,k2,:])
-	return G
+
+	#### FROM EQ. 17 of the phonons paper
+	Phi = np.zeros(G.shape) # ka, k'b
+	for qq in range(len(pt)):
+		Phi[qq] = k_B*T *np.linalg.inv(G[qq])
+	####
+	return Phi
 
 
-def eigenfreqs(traj,M=1.):
-	G_ft = greens_func(traj)
+def eigenfreqs(traj,pt,M=1.):
+	G_ft = greens_func(traj,pt)
 	# print(G_ft.shape)
-	# phi_ft = force_constants(G_ft)
 	phi_ft = force_constants(G_ft)
-	D = np.zeros(phi_ft.shape)
-	D = 1/np.sqrt(M)* phi_ft
-	omega_sq = np.zeros((Natoms,3),dtype='float64')
-	for k1 in prange(Natoms):
-		for k2 in prange(Natoms):
-			# print(D[k1,:,k2,:].shape)
-			# print(np.linalg.eig(D[k1,:,k2,:]))
-			eigenvals,eigenvecs = np.linalg.eigh(D[k1,:,k2,:])
-			print("== EIGENVALUES ==\n",eigenvals)
-			omega_sq[k1,:] = eigenvals
+	# D = np.zeros(phi_ft.shape)
+	D = 1/np.sqrt(M*M)* phi_ft
+
+	omega_sq = np.zeros((len(pt),3),dtype='float64')
+	for qq in prange(len(pt)):
+		eigenvals,eigenvecs = np.linalg.eigh(D[qq])
+		print("== EIGENVALUES ==\n",eigenvals)
+		omega_sq[qq] = eigenvals
 	return np.sqrt(omega_sq)
 
 
 def main():
 	global Natoms
+	global Natoms_root_rev
 	global Nframes
 	a = 1. # lattice constant
 	# high symmetry points for fcc Gamma -> X -> W -> K -> Gamma -> L
@@ -224,6 +218,7 @@ def main():
 
 
 	traj,Natoms,Nframes = read_xyz()
+	Natoms_root_rev = 1.0/np.sqrt(Natoms)
 	traj = traj[:,:,1:]
 
 
@@ -237,7 +232,7 @@ def main():
 	# plot_disp(eigenfrequencies
 
 	# this needs to be changed 
-	freqs = eigenfreqs(traj)
+	freqs = eigenfreqs(traj,pt)
 	print(" == FREQUENCIES (omega(q)) ==\n",freqs)
 
 	return None
