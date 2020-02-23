@@ -139,7 +139,8 @@ def greens_func(traj,pt):
 		for qq in range(len(pt)):
 			for alpha in range(3):
 				for beta in range(3):
-					G_ft[qq,alpha,beta]+= Rq[qq,:,alpha]*Rq_star[qq,:,beta]
+					G_ft[qq,alpha,beta]+= Rq[qq,alpha]*Rq_star[qq,beta]
+					# print G_ft[qq]
 	G_ft*(1.0/Nframes)
 
 	# For Second term
@@ -149,23 +150,24 @@ def greens_func(traj,pt):
 	for qq in range(len(pt)):
 		for alpha in range(3):
 			for beta in range(3):
-				G_ft[qq,alpha, beta] -= R_mean_q[qq,:, alpha] * R_mean_q_star[qq,:, beta]
+				G_ft[qq,alpha, beta] -= R_mean_q[qq, alpha] * R_mean_q_star[qq, beta]
 
 
 	print("G_ft.shape=",G_ft.shape)
 	return G_ft
 
 # @njit()
-def force_constants(G,pt):
+def force_constants(G):
 	""" Calculates force constants $\Phi_{lk\alpha,l'k'\beta}$ """
 	# phi = np.zeros(np.shape(G))
 
 	# check if G is hermitian 
 	# !! PROBLEM should check for all atoms separately
-	# if (np.conj(G)==G).all(): # check if G is hermitian 
-		# print("Matrix is Hermitian")
-	# else:
-		# print("Matrix is NOT Hermitian\n",np.conj(G)==G)
+	for qq in range(G.shape[0]):
+		if (np.conj(G[qq])==G[qq]).all(): # check if G is hermitian
+			print("Matrix is Hermitian, and Determinant is=",np.linalg.det(G[qq]))
+		else:
+			print("Matrix is NOT Hermitian\n",np.conj(G)==G)
 	# 	phi = k_B * T* G
 	# else:
 
@@ -179,7 +181,7 @@ def force_constants(G,pt):
 
 	#### FROM EQ. 17 of the phonons paper
 	Phi = np.zeros(G.shape) # ka, k'b
-	for qq in range(len(pt)):
+	for qq in range(G.shape[0]):
 		Phi[qq] = k_B*T *np.linalg.inv(G[qq])
 	####
 	return Phi
@@ -197,6 +199,7 @@ def eigenfreqs(traj,pt,M=1.):
 		eigenvals,eigenvecs = np.linalg.eigh(D[qq])
 		print("== EIGENVALUES ==\n",eigenvals)
 		omega_sq[qq] = eigenvals
+	print("succeed")
 	return np.sqrt(omega_sq)
 
 
