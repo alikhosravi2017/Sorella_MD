@@ -13,14 +13,14 @@
 #define  LengthZ 4.5
 //#define  displacement  1.5
 #define  Number 54    //number of atoms should be   N=2*(n)^3 ==>> "n" should be integer
-#define  Cutoff 2.5   //cut off
+#define  Cutoff 5   //cut off
 #define  dump_every 100
 #define  log_every  100  
-#define  thermostat_every  100
-#define  h          0.00001
-#define  desired_Temperature          160 //K
+#define  thermostat_every  100000000
+#define  h          0.0005
+#define  desired_Temperature          20 //K
 #define  kB_True         1.38064852e-23  //m2 kg s-2 K-1
-#define  epsilon_True    1.65e-21 //J
+#define  epsilon_True    1.666e-21 //J
 #define  sigma_True      3.4e−10    //m
 /* MD units 
   kB         1 
@@ -48,7 +48,7 @@ int main(){
     ofstream E_output_file ("log.dat");
     cout<<"inter full time:\n ";
 //     cin>>T;
-    T = 100000;
+    T = 1000000;
 
 // Old positioning block!!!!!!!!!
 

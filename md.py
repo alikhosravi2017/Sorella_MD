@@ -16,18 +16,18 @@ from ase.build import bulk
 #####################################################
 Natoms = 0 # will be set, also as global value in premain
 X0=0
-n_a = 4  #Natoms of primitive cell in a direction
-n_b = 4  #Natoms of primitive cell in b direction
-n_c = 4  #Natoms of primitive cell in c direction
+n_a = 3  #Natoms of primitive cell in a direction
+n_b = 3  #Natoms of primitive cell in b direction
+n_c = 3  #Natoms of primitive cell in c direction
 box_sizes = [0,0,0] # from 0 to L in each direction. will be set, also as global value in premain
 box_half_sizes = 0 # will be set, also as global value in premain
-Nsteps = 10**5
+Nsteps = 10**4
 cutoff = 300   #cut off
 dump_step = 100
 log_step = 10
 velocity_zeroing_step =100
-dt = 0.0005
-temp_ref = 30 # reference tempreature in Kelvin
+# dt = 0.0005
+temp_ref = 20 # reference tempreature in Kelvin
 temp_step = 100 # thermostat every N steps
 ################# Potential formula
 Potential_formula= 'LJ' # 'LJ' or 'Morse'
@@ -38,6 +38,7 @@ if Potential_formula == 'LJ':
     sigma_true = 3.4e-10 #3.348e-10    #m
     mass = 6.6335209e-26  # kg
     tau = (1.0)/np.sqrt(epsilon_true/(mass*sigma_true*sigma_true)) # time unit in second
+    dt = 0.001 * 1.0/tau * 1e-12
     print("time unit is= {0} Seconds\n and timestep={1} femtoseconds".format(tau,tau*dt*1e15))
 if Potential_formula == 'Morse':
     D0 =  0.3429 # ev  ## D in Morse potential ## FOR Copper ##
@@ -52,7 +53,7 @@ if Potential_formula == 'Morse':
 trajectory_file = "traj.xyz"
 trajectory_file_unwrapped = "traj_unwrapped.xyz"
 log_file = "output.dat"
-
+ 
 
 np.random.seed(4)
 
@@ -124,7 +125,7 @@ elif Potential_formula == 'Morse':
 
                 r = np.sqrt(delta_x ** 2 + delta_y ** 2 + delta_z ** 2)
                 if r < cutoff:
-                    f0 = 2*alphar0 * (np.exp(-2*alphar0*(r-1)) - np.exp(-alphar0*(r-1)))
+                    f0 = -2*alphar0 * (np.exp(-2*alphar0*(r-1)) - 2*alphar0*np.exp(-alphar0*(r-1))) 
                     fx = delta_x * f0
                     fy = delta_y * f0
                     fz = delta_z * f0
@@ -263,7 +264,7 @@ def log(X,V,step):
 
 ### positioning
 def create_atoms(n_a, n_b, n_c):
-    unitcell = bulk('Ar', 'fcc', np.power(2,(2./3)), orthorhombic=True)  # ===>  1.122 sigma (from geometry)
+    unitcell = bulk('Ar', 'fcc', np.power(2,(2./3)),  cubic=True) #,orthorhombic=True)  # ===>  1.122 sigma (from geometry)
     # unitcell = bulk('Ar', 'fcc', 5.4, orthorhombic=True)
     # visualize.view(unitcell)
     # print unitcell.get_cell()
@@ -278,6 +279,7 @@ def create_atoms(n_a, n_b, n_c):
         all_atoms = stack(all_atoms, atoms_b, axis=2)
     # print all_atoms.get_cell()
     print("The cell is= ", all_atoms.get_cell())
+    visualize.view(all_atoms)
     return all_atoms
 ###
 
