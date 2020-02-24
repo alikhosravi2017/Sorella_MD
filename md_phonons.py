@@ -173,16 +173,16 @@ def force_constants(G):
 	# !! PROBLEM should check for all atoms separately
 	for qq in range(G.shape[0]):
 		if (np.round(np.conj(G[qq]),1)==np.round(G[qq],1)).all(): # check if G is hermitian
-			print G[qq]
+			print(G[qq])
 			print("Matrix is Hermitian, and Determinant is=",np.linalg.det(G[qq]))
 		else:
 			# print("Matrix is NOT Hermitian\n",np.conj(G)==G)
-			print "Matrix is NOT Hermitian"
+			print("Matrix is NOT Hermitian")
 			# print "G.conj is :\n",np.conj(G[qq])
-			print "G is :\n",G[qq][0]
-			print "G is :\n",G[qq][1]
-			print "G is :\n",G[qq][2]
-			exit()
+			print("G is :\n",G[qq][0])
+			print("G is :\n",G[qq][1])
+			print("G is :\n",G[qq][2])
+			#exit()
 	# 	phi = k_B * T* G
 	# else:
 
@@ -229,9 +229,10 @@ def main():
 	W = np.array([np.pi/a,2*np.pi/a,0])
 	K =  np.array([3*np.pi/(2*a),3*np.pi/(2*a),0])
 	L = np.array([np.pi/a,np.pi/a,np.pi/a])	
-	pt = highsymm_path(np.array([gamma,X,W,K,gamma,L]))
-	plt.plot(pt,"-.")
-	plt.legend(["1/x","1/y","1/z"])
+	U = np.array([np.pi/(2*a),2*np.pi/a,np.pi/(2*a)])
+	pt = highsymm_path(np.array([K,gamma,L,W,X,U,X,gamma]))
+	# plt.plot(pt,"-.")
+	# plt.legend(["1/x","1/y","1/z"])
 	# plt.show()
 
 
@@ -253,8 +254,13 @@ def main():
 	# plot_disp(eigenfrequencies
 
 	# this needs to be changed 
-	freqs = eigenfreqs(traj,pt)
+	freqs = eigenfreqs(traj,pt) 
 	print(" == FREQUENCIES (omega(q)) ==\n",freqs)
+	kline=np.arange(freqs.shape[0])
+	plt.plot(kline,freqs[:,0],kline,freqs[:,1],kline,freqs[:,2])
+	plt.show()
+	#plt.savefig("test.pdf")
+
 
 	return None
 

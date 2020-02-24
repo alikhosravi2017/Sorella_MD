@@ -16,21 +16,21 @@ from ase.build import bulk
 #####################################################
 Natoms = 0 # will be set, also as global value in premain
 X0=0
-n_a = 3  #Natoms of primitive cell in a direction
-n_b = 3  #Natoms of primitive cell in b direction
-n_c = 3  #Natoms of primitive cell in c direction
+n_a = 4  #Natoms of primitive cell in a direction
+n_b = 4  #Natoms of primitive cell in b direction
+n_c = 4  #Natoms of primitive cell in c direction
 box_sizes = [0,0,0] # from 0 to L in each direction. will be set, also as global value in premain
 box_half_sizes = 0 # will be set, also as global value in premain
-Nsteps = 10**4
+Nsteps = 10**5
 cutoff = 300   #cut off
 dump_step = 100
 log_step = 10
 velocity_zeroing_step =100
 dt = 0.0005
-temp_ref = 20 # reference tempreature in Kelvin
+temp_ref = 30 # reference tempreature in Kelvin
 temp_step = 100 # thermostat every N steps
 ################# Potential formula
-Potential_formula= 'Morse' # 'LJ' or 'Morse'
+Potential_formula= 'LJ' # 'LJ' or 'Morse'
 #################
 kB_true = 1.38064852e-23  #m2 kg s-2 K-1
 if Potential_formula == 'LJ':
@@ -124,7 +124,7 @@ elif Potential_formula == 'Morse':
 
                 r = np.sqrt(delta_x ** 2 + delta_y ** 2 + delta_z ** 2)
                 if r < cutoff:
-                    f0 = -2*alphar0 * (np.exp(-2*alphar0*(r-1)) - 2*alphar0*np.exp(-alphar0*(r-1))) 
+                    f0 = 2*alphar0 * (np.exp(-2*alphar0*(r-1)) - np.exp(-alphar0*(r-1)))
                     fx = delta_x * f0
                     fy = delta_y * f0
                     fz = delta_z * f0
