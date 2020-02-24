@@ -32,21 +32,27 @@ def read_xyz(pos=trajectory_file):
 		frame = 0
 		k = 0
 		counter = 0
+		traj_built_flag = True
 		for idx,ln in enumerate(lines):
 			if counter==0:
-				Natoms = int(ln)
-				Nframes = int(len(lines)/(Natoms+2))
-				traj = np.zeros((Nframes,Natoms,4))
+				if traj_built_flag :
+					Natoms = int(ln)
+					Nframes = int(len(lines)/(Natoms+2))
+					traj = np.zeros((Nframes,Natoms,4))
+					traj_built_flag = False
 				counter += 1
 			elif counter==1:
 				k = 0 # atom idx
 				counter +=1 
 			elif counter>1:
 				b = [float(l) for l in ln.split()]
+				# print [float(l) for l in ln.split()]
 				traj[frame,k,:] = [float(l) for l in ln.split()]
+				# print traj[frame,k,:]
 				k += 1
 				counter += 1
 				if counter==(Natoms+2):
+					# print Natoms, ln
 					counter = 0
 					frame += 1
 	return traj,Natoms,Nframes
@@ -62,7 +68,7 @@ def equidist(p1, p2, npoints=20):
 	return temp
 
 # @njit()
-def highsymm_path(symm_points,npoints=200):
+def highsymm_path(symm_points,npoints=100):
 	""" Generates high symmetry path 
 	along the given points."""
 
@@ -108,11 +114,13 @@ def FT(POS,pt):
 	:param pt: high symmetry path
 	:return:
 	'''
-	kir = np.zeros((len(pt),3))
+	# print "POS",POS
+	kir = np.zeros((len(pt),3),dtype = "complex_")
 	if len(POS.shape) == 2:
 		for ii in range(len(pt)):
 			qq = pt[ii]
 			exponential = np.exp(-1j * np.sum(qq * POS, axis=1))
+			# print  np.sum(POS[:,0] * exponential)
 			kir[ii,0] = Natoms_root_rev*np.sum( POS[:,0] * exponential )
 			kir[ii,1] = Natoms_root_rev*np.sum( POS[:,1] * exponential )
 			kir[ii,2] = Natoms_root_rev*np.sum( POS[:,2] * exponential )
@@ -131,7 +139,7 @@ def greens_func(traj,pt):
 
 	G_ft = np.zeros((len(pt),3,3),dtype='complex128') # ka, k'b
 	# print("G shape",G_ft.shape)
-
+	# print 'traj is',traj
 	# For first term
 	for fram in range(Nframes):
 		Rq      =  FT(traj[fram],pt)
@@ -164,10 +172,17 @@ def force_constants(G):
 	# check if G is hermitian 
 	# !! PROBLEM should check for all atoms separately
 	for qq in range(G.shape[0]):
-		if (np.conj(G[qq])==G[qq]).all(): # check if G is hermitian
+		if (np.round(np.conj(G[qq]),1)==np.round(G[qq],1)).all(): # check if G is hermitian
+			print G[qq]
 			print("Matrix is Hermitian, and Determinant is=",np.linalg.det(G[qq]))
 		else:
-			print("Matrix is NOT Hermitian\n",np.conj(G)==G)
+			# print("Matrix is NOT Hermitian\n",np.conj(G)==G)
+			print "Matrix is NOT Hermitian"
+			# print "G.conj is :\n",np.conj(G[qq])
+			print "G is :\n",G[qq][0]
+			print "G is :\n",G[qq][1]
+			print "G is :\n",G[qq][2]
+			exit()
 	# 	phi = k_B * T* G
 	# else:
 
@@ -217,11 +232,14 @@ def main():
 	pt = highsymm_path(np.array([gamma,X,W,K,gamma,L]))
 	plt.plot(pt,"-.")
 	plt.legend(["1/x","1/y","1/z"])
-	plt.show()
+	# plt.show()
 
 
 	traj,Natoms,Nframes = read_xyz()
 	Natoms_root_rev = 1.0/np.sqrt(Natoms)
+
+	# print "this is traj:",traj[:,:,1:]
+	# exit()
 	traj = traj[:,:,1:]
 
 
