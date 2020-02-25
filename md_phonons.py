@@ -1,6 +1,9 @@
 #/usr/bin/env python3
 import numpy as np
-from mpl_toolkits.mplot3d import Axes3D 
+import time
+t_start = time.time()
+print("start","Time: 0 seconds\n")
+from mpl_toolkits.mplot3d import Axes3D
 import matplotlib.pyplot as plt
 from numba import njit,prange
 plt.style.use('ggplot')
@@ -17,11 +20,11 @@ trajectory_file = "traj_unwrapped.xyz"
 # k,k' -> runs over all Natoms
 # \alpha, \beta -> x,y,z
 
-cell = np.ones((3,3))
+# cell = np.ones((3,3))
 # number of repeats
-l = [5,5,5]
+
 # origin of l-th unit cell relative to l=[0,0,0]
-r_l = np.dot(l,cell)
+
 
 
 def read_xyz(pos=trajectory_file):
@@ -55,6 +58,7 @@ def read_xyz(pos=trajectory_file):
 					# print Natoms, ln
 					counter = 0
 					frame += 1
+	print("file is read!","Time: {:.2f} seconds\n".format(time.time()-t_start))
 	return traj,Natoms,Nframes
 
 
@@ -68,29 +72,38 @@ def equidist(p1, p2, npoints=20):
 	return temp
 
 # @njit()
-def highsymm_path(symm_points,npoints=100):
+def highsymm_path(symm_points,l):
 	""" Generates high symmetry path 
 	along the given points."""
+	#
+	# path = np.zeros((npoints*(symm_points.shape[0]-1),symm_points.shape[1]))
+	#
+	# # loop over each high symm point
+	# for i in range(len(symm_points)-1):
+	# 	temp = equidist(symm_points[i],symm_points[i+1],npoints)
+	# 	# print(temp.shape)
+	# 	z = 0
+	# 	# loop over each sample point along the path
+	# 	for j in range(i*npoints,(i+1)*npoints):
+	# 		path[j,:] = temp[z,:]
+	# 		z += 1
+	#
+	# # hardcoded (to be removed)
+	# # gammaX = equidist(gamma,X,20)
+	# # XW = equidist(X,W,20)
+	# # WK = equidist(W,K,20)
+	# # Kgamma = equidist(K,gamma,20)
+	# # gammaL = equidist(gamma,L,20+1)
+	# # path = np.vstack((gammaX,XW,WK,Kgamma,gammaL))
 
-	path = np.zeros((npoints*(symm_points.shape[0]-1),symm_points.shape[1]))
+	# K_step = 2 * np.pi / (a * l[0])
+	l0_rev = 1.0 / l[0]
 
-	# loop over each high symm point
-	for i in range(len(symm_points)-1):
-		temp = equidist(symm_points[i],symm_points[i+1],npoints)
-		# print(temp.shape)
-		z = 0
-		# loop over each sample point along the path
-		for j in range(i*npoints,(i+1)*npoints):
-			path[j,:] = temp[z,:]
-			z += 1
-
-	# hardcoded (to be removed)
-	# gammaX = equidist(gamma,X,20)
-	# XW = equidist(X,W,20)
-	# WK = equidist(W,K,20)
-	# Kgamma = equidist(K,gamma,20)
-	# gammaL = equidist(gamma,L,20+1)
-	# path = np.vstack((gammaX,XW,WK,Kgamma,gammaL))
+	path_diff_symm_points = np.diff(symm_points, axis=0)
+	path = np.array(symm_points[0],ndmin=2)
+	for ii in range(path_diff_symm_points.shape[0]):
+		for jj in range(l[0]):
+			path = np.append(path,[path[-1] + path_diff_symm_points[ii] * l0_rev], axis=0)
 
 	return path
 
@@ -150,17 +163,19 @@ def greens_func(traj,pt):
 					G_ft[qq,alpha,beta]+= Rq[qq,alpha]*Rq_star[qq,beta]
 					# print G_ft[qq]
 	G_ft*(1.0/Nframes)
-
+	print("Green function first term is done!","Time: {:.2f} seconds\n".format(time.time()-t_start))
 	# For Second term
 	R_mean = np.mean(traj,axis=0)
 	R_mean_q = FT(R_mean,pt)
 	R_mean_q_star = np.conj(R_mean_q)
+
 	for qq in range(len(pt)):
 		for alpha in range(3):
 			for beta in range(3):
 				G_ft[qq,alpha, beta] -= R_mean_q[qq, alpha] * R_mean_q_star[qq, beta]
 
-
+	print("Green function Second term is done!","Time: {:.2f} seconds\n".format(time.time()-t_start))
+	print("Green function is made!")
 	print("G_ft.shape=",G_ft.shape)
 	return G_ft
 
@@ -222,15 +237,28 @@ def main():
 	global Natoms
 	global Natoms_root_rev
 	global Nframes
-	a = 1. # lattice constant
+	a = 1.587401 # cubic constant in sigma units
+	skip_portion =  30 #skip this percent of total time step at the begining
 	# high symmetry points for fcc Gamma -> X -> W -> K -> Gamma -> L
+	l = np.array([3, 3, 3])  # lattice size in each direction YOU DONT HAVE ANY CHOICE, THEY MUST BE EQUAL!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+	### High symmetry points in Kx,Ky,Kz direction ref of the path: http://lampx.tugraz.at/~hadley/ss1/bzones/fcc.php
+
 	gamma = np.array([0,0,0])
+
 	X = np.array([0,2*np.pi/a,0])
 	W = np.array([np.pi/a,2*np.pi/a,0])
 	K =  np.array([3*np.pi/(2*a),3*np.pi/(2*a),0])
 	L = np.array([np.pi/a,np.pi/a,np.pi/a])	
 	U = np.array([np.pi/(2*a),2*np.pi/a,np.pi/(2*a)])
-	pt = highsymm_path(np.array([K,gamma,L,W,X,U,X,gamma]))
+
+	pt = highsymm_path(np.array([K,gamma,L,W,X,U,X,gamma]),l)
+	plot_ticks = ('K', 'gamma','L','W','X','U','X','gamma')
+	print("number of q points=",pt.shape[0])
+
+
+
+
 	# plt.plot(pt,"-.")
 	# plt.legend(["1/x","1/y","1/z"])
 	# plt.show()
@@ -241,25 +269,34 @@ def main():
 
 	# print "this is traj:",traj[:,:,1:]
 	# exit()
-	traj = traj[:,:,1:]
-
-
-	# EXPECTED WORKFLOW
-	# inputs: 
-	#	trajectory (variable: traj, shape: No. frames x No. atoms x 3)
-	# 	high symmetry path (variable: pt, shape: No. path points x 3)
-	# output: 
-	#	eigenfrequencies (shape: No. eigenfrequencies x No. path points x 3)
-
-	# plot_disp(eigenfrequencies
+	traj = traj[traj.shape[0]*skip_portion/100:,:,1:]
+	Nframes = traj.shape[0]
 
 	# this needs to be changed 
 	freqs = eigenfreqs(traj,pt) 
 	print(" == FREQUENCIES (omega(q)) ==\n",freqs)
-	kline=np.arange(freqs.shape[0])
-	plt.plot(kline,freqs[:,0],kline,freqs[:,1],kline,freqs[:,2])
-	plt.show()
+	# kline=np.arange(freqs.shape[0])
+	# plt.plot(kline,freqs[:,0],kline,freqs[:,1],kline,freqs[:,2])
+	# plt.show()
 	#plt.savefig("test.pdf")
+
+
+	# This is 100% currect
+	pt_diff =np.linalg.norm(np.diff(pt,axis=0))
+	X=[pt[0]]
+	plot_ticks_pos = [0]
+	for ii in range(len(pt_diff)):
+		x=pt[ii]+pt_diff[ii]
+		X.append(x)
+		if (ii+1)%3==0:
+			plot_ticks_pos.append(x)
+
+	plt.plot(X, freqs[:, 0], X, freqs[:, 1], X, freqs[:, 2])
+	plt.xticks(plot_ticks_pos,plot_ticks)
+	plt.show()
+	plt.savefig("test.pdf")
+
+
 
 
 	return None
