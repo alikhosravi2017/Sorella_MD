@@ -6,12 +6,16 @@ print("start","Time: 0 seconds\n")
 from mpl_toolkits.mplot3d import Axes3D
 import matplotlib.pyplot as plt
 from numba import njit,prange
+
+
 plt.style.use('ggplot')
 
 # parameters
 k_B = 1
 T =1
-trajectory_file = "traj_unwrapped.xyz"
+path_='with_lammps/'
+trajectory_file = "traj_lammps.xyz"
+# trajectory_file = "traj_unwrapped.xyz"
 
 
 
@@ -27,7 +31,7 @@ trajectory_file = "traj_unwrapped.xyz"
 
 
 
-def read_xyz(pos=trajectory_file):
+def read_xyz(pos=path_+trajectory_file):
 	""" Reads .xyz file and create a frame-indexed trajectory array."""
 	with open(pos,"r") as f:
 		Natoms,Nframes = 0,0
@@ -186,18 +190,18 @@ def force_constants(G):
 
 	# check if G is hermitian 
 	# !! PROBLEM should check for all atoms separately
-	for qq in range(G.shape[0]):
-		if (np.round(np.conj(G[qq]),1)==np.round(G[qq],1)).all(): # check if G is hermitian
-			print(G[qq])
-			print("Matrix is Hermitian, and Determinant is=",np.linalg.det(G[qq]))
-		else:
-			# print("Matrix is NOT Hermitian\n",np.conj(G)==G)
-			print("Matrix is NOT Hermitian")
-			# print "G.conj is :\n",np.conj(G[qq])
-			print("G is :\n",G[qq][0])
-			print("G is :\n",G[qq][1])
-			print("G is :\n",G[qq][2])
-			#exit()
+	# for qq in range(G.shape[0]):
+	# 	if (np.round(np.conj(G[qq]),1)==np.round(G[qq],1)).all(): # check if G is hermitian
+	# 		print(G[qq])
+	# 		print("Matrix is Hermitian, and Determinant is=",np.linalg.det(G[qq]))
+	# 	else:
+	# 		# print("Matrix is NOT Hermitian\n",np.conj(G)==G)
+	# 		print("Matrix is NOT Hermitian")
+	# 		# print "G.conj is :\n",np.conj(G[qq])
+	# 		print("G is :\n",G[qq][0])
+	# 		print("G is :\n",G[qq][1])
+	# 		print("G is :\n",G[qq][2])
+	# 		#exit()
 	# 	phi = k_B * T* G
 	# else:
 
@@ -210,7 +214,7 @@ def force_constants(G):
 	# 		phi[k1,:,k2,:] = k_B * T* np.linalg.inv(G[k1,:,k2,:])
 
 	#### FROM EQ. 17 of the phonons paper
-	Phi = np.zeros(G.shape) # ka, k'b
+	Phi = np.zeros(G.shape,dtype='complex128') # ka, k'b
 	for qq in range(G.shape[0]):
 		Phi[qq] = k_B*T *np.linalg.inv(G[qq])
 	####
@@ -237,6 +241,11 @@ def main():
 	global Natoms
 	global Natoms_root_rev
 	global Nframes
+
+	had_run_before = False
+	# had_run_before = True
+
+
 	a = 1.587401 # cubic constant in sigma units
 	skip_portion =  30 #skip this percent of total time step at the begining
 	# high symmetry points for fcc Gamma -> X -> W -> K -> Gamma -> L
@@ -253,48 +262,43 @@ def main():
 	U = np.array([np.pi/(2*a),2*np.pi/a,np.pi/(2*a)])
 
 	pt = highsymm_path(np.array([K,gamma,L,W,X,U,X,gamma]),l)
-	plot_ticks = ('K', 'gamma','L','W','X','U','X','gamma')
+	plot_ticks = ['K', r'$\Gamma$','L','W','X','U','X',r'$\Gamma$']
 	print("number of q points=",pt.shape[0])
 
 
+	if had_run_before==False:
+		traj,Natoms,Nframes = read_xyz()
+		Natoms_root_rev = 1.0/np.sqrt(Natoms)
 
+		traj = traj[traj.shape[0]*skip_portion/100:,:,1:]
+		Nframes = traj.shape[0]
 
-	# plt.plot(pt,"-.")
-	# plt.legend(["1/x","1/y","1/z"])
-	# plt.show()
+		# this needs to be changed
+		freqs = eigenfreqs(traj,pt)
+		print(" == FREQUENCIES (omega(q)) ==\n",freqs)
+		np.save(path_+'temp_pt', pt)
+		np.save(path_+'temp_freqs', pt,freqs)
+	elif had_run_before==True:
+		pt= np.load('temp_pt.npy', allow_pickle=True)
+		freqs= np.load('temp_freqs.npy', allow_pickle=True)
 
-
-	traj,Natoms,Nframes = read_xyz()
-	Natoms_root_rev = 1.0/np.sqrt(Natoms)
-
-	# print "this is traj:",traj[:,:,1:]
-	# exit()
-	traj = traj[traj.shape[0]*skip_portion/100:,:,1:]
-	Nframes = traj.shape[0]
-
-	# this needs to be changed 
-	freqs = eigenfreqs(traj,pt) 
-	print(" == FREQUENCIES (omega(q)) ==\n",freqs)
-	# kline=np.arange(freqs.shape[0])
-	# plt.plot(kline,freqs[:,0],kline,freqs[:,1],kline,freqs[:,2])
-	# plt.show()
-	#plt.savefig("test.pdf")
-
-
-	# This is 100% currect
-	pt_diff =np.linalg.norm(np.diff(pt,axis=0))
-	X=[pt[0]]
+	freqs=np.sqrt(freqs)
+	pt_diff =np.linalg.norm(np.diff(pt,axis=0),axis=1)
+	print pt_diff
+	X=[0]
 	plot_ticks_pos = [0]
-	for ii in range(len(pt_diff)):
-		x=pt[ii]+pt_diff[ii]
+	for ii in range(pt_diff.shape[0]):
+		x=X[ii]+pt_diff[ii]
 		X.append(x)
 		if (ii+1)%3==0:
 			plot_ticks_pos.append(x)
 
-	plt.plot(X, freqs[:, 0], X, freqs[:, 1], X, freqs[:, 2])
+
+	plt.plot(X, freqs[:, 0],'o-',        X, freqs[:, 1],'o-',         X, freqs[:, 2],'o-')
+	print(plot_ticks_pos,plot_ticks)
 	plt.xticks(plot_ticks_pos,plot_ticks)
 	plt.show()
-	plt.savefig("test.pdf")
+	plt.savefig(path_+"test.pdf")
 
 
 
