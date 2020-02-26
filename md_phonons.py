@@ -13,7 +13,8 @@ plt.style.use('ggplot')
 # parameters
 k_B = 1
 T =1
-path_='with_lammps/'
+folder_path='with_lammps/'
+# folder_path=''
 trajectory_file = "traj_lammps.xyz"
 # trajectory_file = "traj_unwrapped.xyz"
 
@@ -31,7 +32,7 @@ trajectory_file = "traj_lammps.xyz"
 
 
 
-def read_xyz(pos=path_+trajectory_file):
+def read_xyz(pos=folder_path+trajectory_file):
 	""" Reads .xyz file and create a frame-indexed trajectory array."""
 	with open(pos,"r") as f:
 		Natoms,Nframes = 0,0
@@ -62,6 +63,7 @@ def read_xyz(pos=path_+trajectory_file):
 					# print Natoms, ln
 					counter = 0
 					frame += 1
+	f.close()
 	print("file is read!","Time: {:.2f} seconds\n".format(time.time()-t_start))
 	return traj,Natoms,Nframes
 
@@ -79,35 +81,15 @@ def equidist(p1, p2, npoints=20):
 def highsymm_path(symm_points,l):
 	""" Generates high symmetry path 
 	along the given points."""
-	#
-	# path = np.zeros((npoints*(symm_points.shape[0]-1),symm_points.shape[1]))
-	#
-	# # loop over each high symm point
-	# for i in range(len(symm_points)-1):
-	# 	temp = equidist(symm_points[i],symm_points[i+1],npoints)
-	# 	# print(temp.shape)
-	# 	z = 0
-	# 	# loop over each sample point along the path
-	# 	for j in range(i*npoints,(i+1)*npoints):
-	# 		path[j,:] = temp[z,:]
-	# 		z += 1
-	#
-	# # hardcoded (to be removed)
-	# # gammaX = equidist(gamma,X,20)
-	# # XW = equidist(X,W,20)
-	# # WK = equidist(W,K,20)
-	# # Kgamma = equidist(K,gamma,20)
-	# # gammaL = equidist(gamma,L,20+1)
-	# # path = np.vstack((gammaX,XW,WK,Kgamma,gammaL))
 
 	# K_step = 2 * np.pi / (a * l[0])
 	l0_rev = 1.0 / l[0]
 
-	path_diff_symm_points = np.diff(symm_points, axis=0)
+	folder_pathdiff_symm_points = np.diff(symm_points, axis=0)
 	path = np.array(symm_points[0],ndmin=2)
-	for ii in range(path_diff_symm_points.shape[0]):
+	for ii in range(folder_pathdiff_symm_points.shape[0]):
 		for jj in range(l[0]):
-			path = np.append(path,[path[-1] + path_diff_symm_points[ii] * l0_rev], axis=0)
+			path = np.append(path,[path[-1] + folder_pathdiff_symm_points[ii] * l0_rev], axis=0)
 
 	return path
 
@@ -136,7 +118,7 @@ def FT(POS,pt):
 	if len(POS.shape) == 2:
 		for ii in range(len(pt)):
 			qq = pt[ii]
-			exponential = np.exp(-1j * np.sum(qq * POS, axis=1))
+			exponential = np.exp(-1j * np.sum(qq * traj_for_FT, axis=1))
 			# print  np.sum(POS[:,0] * exponential)
 			kir[ii,0] = Natoms_root_rev*np.sum( POS[:,0] * exponential )
 			kir[ii,1] = Natoms_root_rev*np.sum( POS[:,1] * exponential )
@@ -187,7 +169,6 @@ def greens_func(traj,pt):
 def force_constants(G):
 	""" Calculates force constants $\Phi_{lk\alpha,l'k'\beta}$ """
 	# phi = np.zeros(np.shape(G))
-
 	# check if G is hermitian 
 	# !! PROBLEM should check for all atoms separately
 	# for qq in range(G.shape[0]):
@@ -205,14 +186,6 @@ def force_constants(G):
 	# 	phi = k_B * T* G
 	# else:
 
-	# for k1 in range(Natoms):
-	# 	for k2 in range(Natoms):
-	# 		for a in range(3):
-	# 			for b in range(3):
-	# 				print("G shape atom_i ={} atom_j={} |".format(k1,k2),G[k1,:,k2,:].shape)
-	# 				print("== ==\n",G[k1,:,k2,:],np.conj(G[k1,:,k2,:].T))
-	# 		phi[k1,:,k2,:] = k_B * T* np.linalg.inv(G[k1,:,k2,:])
-
 	#### FROM EQ. 17 of the phonons paper
 	Phi = np.zeros(G.shape,dtype='complex128') # ka, k'b
 	for qq in range(G.shape[0]):
@@ -221,15 +194,11 @@ def force_constants(G):
 	return Phi
 
 
-def eigenfreqs(traj,pt,M=1.):
-	G_ft = greens_func(traj,pt)
-	# print(G_ft.shape)
-	phi_ft = force_constants(G_ft)
-	# D = np.zeros(phi_ft.shape)
-	D = 1/np.sqrt(M*M)* phi_ft
+def eigenfreqs(phi_ft,nuq,M=1.):
 
-	omega_sq = np.zeros((len(pt),3),dtype='float64')
-	for qq in prange(len(pt)):
+	D = 1/np.sqrt(M*M)* phi_ft
+	omega_sq = np.zeros((nuq,3),dtype='float64')
+	for qq in prange(nuq):
 		eigenvals,eigenvecs = np.linalg.eigh(D[qq])
 		print("== EIGENVALUES ==\n",eigenvals)
 		omega_sq[qq] = eigenvals
@@ -237,52 +206,78 @@ def eigenfreqs(traj,pt,M=1.):
 	return np.sqrt(omega_sq)
 
 
+def ASR(phi,pgp,nucell):
+	"""
+	:param phi: is Force matrix at q=0
+	:param nucell: is number of atoms in unitcell, For the time being it works only for nucell==1
+	:return: ASRed phi_0
+	"""
+	if nucell != 1: raise ReferenceError
+
+	for ii in pgp:
+		phi[ii] = np.imag(phi[ii])*1j  # Zeroing phi at Gamma point (call me Neven, if you complain :)
+	return phi
+
+
 def main():
 	global Natoms
 	global Natoms_root_rev
 	global Nframes
+	global traj_for_FT
 
 	had_run_before = False
 	# had_run_before = True
 
-
+	# set some initial values
 	a = 1.587401 # cubic constant in sigma units
 	skip_portion =  30 #skip this percent of total time step at the begining
-	# high symmetry points for fcc Gamma -> X -> W -> K -> Gamma -> L
-	l = np.array([3, 3, 3])  # lattice size in each direction YOU DONT HAVE ANY CHOICE, THEY MUST BE EQUAL!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+	l = np.array([3, 3, 3])  # lattice size in each direction. THEY MUST BE EQUAL!
 
-	### High symmetry points in Kx,Ky,Kz direction ref of the path: http://lampx.tugraz.at/~hadley/ss1/bzones/fcc.php
-
+	# Defining high symmetry points in Kx,Ky,Kz direction ref of the path: http://lampx.tugraz.at/~hadley/ss1/bzones/fcc.php
 	gamma = np.array([0,0,0])
-
 	X = np.array([0,2*np.pi/a,0])
 	W = np.array([np.pi/a,2*np.pi/a,0])
 	K =  np.array([3*np.pi/(2*a),3*np.pi/(2*a),0])
 	L = np.array([np.pi/a,np.pi/a,np.pi/a])	
 	U = np.array([np.pi/(2*a),2*np.pi/a,np.pi/(2*a)])
 
-	pt = highsymm_path(np.array([K,gamma,L,W,X,U,X,gamma]),l)
+	# pt = highsymm_path(np.array([K,gamma,L,W,X,U,X,gamma]),l) # make a path of all points
+	# pgp = np.array([1,7])*l[0]  # position of gamma points for ASR  Manually for the time being! ==> Just put index of where gamma points is in pt.
+
+	pt = highsymm_path(np.array([gamma,X,W,K,gamma,L]),l) # make a path of all points
+	pgp = np.array([0,4])*l[0]  # position of gamma points for ASR  Manually for the time being! ==> Just put index of where gamma points is in pt.
+
+
 	plot_ticks = ['K', r'$\Gamma$','L','W','X','U','X',r'$\Gamma$']
-	print("number of q points=",pt.shape[0])
+	nuq = pt.shape[0]  # Total number of all points
+	print("number of q points=",nuq)
 
 
 	if had_run_before==False:
 		traj,Natoms,Nframes = read_xyz()
 		Natoms_root_rev = 1.0/np.sqrt(Natoms)
-
-		traj = traj[traj.shape[0]*skip_portion/100:,:,1:]
+		traj_for_FT = traj[0, :, 1:]
+		traj =  traj[traj.shape[0]*skip_portion/100:,:,1:]
 		Nframes = traj.shape[0]
 
-		# this needs to be changed
-		freqs = eigenfreqs(traj,pt)
-		print(" == FREQUENCIES (omega(q)) ==\n",freqs)
-		np.save(path_+'temp_pt', pt)
-		np.save(path_+'temp_freqs', pt,freqs)
-	elif had_run_before==True:
-		pt= np.load('temp_pt.npy', allow_pickle=True)
-		freqs= np.load('temp_freqs.npy', allow_pickle=True)
 
-	freqs=np.sqrt(freqs)
+
+		# MAIN engine
+		G_ft = greens_func(traj, pt)     # Calculates green function
+		phi_ft = force_constants(G_ft)   # Calculates force matrix in reciprocal space
+		phi_ft=ASR(phi_ft,pgp,nucell=1)            # Apply ASR
+		freqs = eigenfreqs(phi_ft,nuq)   # Calculates eigen values which is frequencies
+		print(" == FREQUENCIES (omega(q)) ==\n",freqs)
+
+		# Save everything, if you wanted to change a little thing in plots
+		np.save(folder_path+'temp_pt', pt)
+		np.save(folder_path+'temp_freqs',freqs)
+
+	elif had_run_before==True:
+		pt= np.load(folder_path+'temp_pt.npy', allow_pickle=True)
+		freqs= np.load(folder_path+'temp_freqs.npy', allow_pickle=True)
+
+
 	pt_diff =np.linalg.norm(np.diff(pt,axis=0),axis=1)
 	print pt_diff
 	X=[0]
@@ -293,12 +288,14 @@ def main():
 		if (ii+1)%3==0:
 			plot_ticks_pos.append(x)
 
-
-	plt.plot(X, freqs[:, 0],'o-',        X, freqs[:, 1],'o-',         X, freqs[:, 2],'o-')
+	print(freqs)
+	plt.plot(X, freqs[:, 0],'o-',color='black')
+	plt.plot(X, freqs[:, 1],'o-',color='black')
+	plt.plot(X, freqs[:, 2],'o-',color='black')
 	print(plot_ticks_pos,plot_ticks)
 	plt.xticks(plot_ticks_pos,plot_ticks)
 	plt.show()
-	plt.savefig(path_+"test.pdf")
+	plt.savefig(folder_path+"test.pdf")
 
 
 
