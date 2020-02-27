@@ -106,7 +106,17 @@ def plot_disp(bands):
 	return None
 
 
-def FT(POS,pt):
+
+def exponential_term(traj_0,pt):
+	exponentials = np.zeros((nuq, Natoms), dtype="complex_")
+	for ii in range(nuq):
+		exponentials[ii] = np.exp(-1j * np.sum(pt[ii] * traj_0, axis=1))
+	print("exponential calculated")
+	return exponentials
+
+
+
+def FT(POS,exponentials):
 	'''
 	Calculate Fourier transform of position. ONLY for 1 FRAME
 	:param traj: in this dimension: POS[natom,3]
@@ -114,21 +124,21 @@ def FT(POS,pt):
 	:return:
 	'''
 	# print "POS",POS
-	kir = np.zeros((len(pt),3),dtype = "complex_")
+	kir = np.zeros((nuq,3),dtype = "complex_")
 	if len(POS.shape) == 2:
-		for ii in range(len(pt)):
-			qq = pt[ii]
-			exponential = np.exp(-1j * np.sum(qq * traj_for_FT, axis=1))
+		for ii in range(nuq):
+			# qq = pt[ii]
+			# exponential = np.exp(-1j * np.sum(qq * traj_for_FT, axis=1))
 			# print  np.sum(POS[:,0] * exponential)
-			kir[ii,0] = Natoms_root_rev*np.sum( POS[:,0] * exponential )
-			kir[ii,1] = Natoms_root_rev*np.sum( POS[:,1] * exponential )
-			kir[ii,2] = Natoms_root_rev*np.sum( POS[:,2] * exponential )
+			kir[ii,0] = Natoms_root_rev*np.sum( POS[:,0] * exponentials[ii] )
+			kir[ii,1] = Natoms_root_rev*np.sum( POS[:,1] * exponentials[ii] )
+			kir[ii,2] = Natoms_root_rev*np.sum( POS[:,2] * exponentials[ii] )
 	else:   raise ValueError
 	return kir
 
 
 # @njit()
-def greens_func(traj,pt):
+def greens_func(traj,traj_for_FT,pt):
 	"""	Takes the Fourier transform of the absolute positions for a given vector.
 	Averages all frames and calculates the FT Green's function coeffs at each 
 	wave vector q."""
@@ -137,11 +147,12 @@ def greens_func(traj,pt):
 	# R_ka = np.mean(traj,axis=0) # average over all frames
 
 	G_ft = np.zeros((len(pt),3,3),dtype='complex128') # ka, k'b
-	# print("G shape",G_ft.shape)
-	# print 'traj is',traj
+
+	# Calculate exponential term necessarily for FT calculation
+	exponentials = exponential_term(traj_for_FT, pt)
 	# For first term
 	for fram in range(Nframes):
-		Rq      =  FT(traj[fram],pt)
+		Rq      =  FT(traj[fram],exponentials)
 		Rq_star =  np.conj(Rq)
 		for qq in range(len(pt)):
 			for alpha in range(3):
@@ -152,7 +163,7 @@ def greens_func(traj,pt):
 	print("Green function first term is done!","Time: {:.2f} seconds\n".format(time.time()-t_start))
 	# For Second term
 	R_mean = np.mean(traj,axis=0)
-	R_mean_q = FT(R_mean,pt)
+	R_mean_q = FT(R_mean,exponentials)
 	R_mean_q_star = np.conj(R_mean_q)
 
 	for qq in range(len(pt)):
@@ -171,18 +182,18 @@ def force_constants(G):
 	# phi = np.zeros(np.shape(G))
 	# check if G is hermitian 
 	# !! PROBLEM should check for all atoms separately
-	# for qq in range(G.shape[0]):
-	# 	if (np.round(np.conj(G[qq]),1)==np.round(G[qq],1)).all(): # check if G is hermitian
-	# 		print(G[qq])
-	# 		print("Matrix is Hermitian, and Determinant is=",np.linalg.det(G[qq]))
-	# 	else:
-	# 		# print("Matrix is NOT Hermitian\n",np.conj(G)==G)
-	# 		print("Matrix is NOT Hermitian")
-	# 		# print "G.conj is :\n",np.conj(G[qq])
-	# 		print("G is :\n",G[qq][0])
-	# 		print("G is :\n",G[qq][1])
-	# 		print("G is :\n",G[qq][2])
-	# 		#exit()
+	for qq in range(G.shape[0]):
+		if (np.round(np.transpose(np.conj(G[qq])),4)==np.round(G[qq],4)).all(): # check if G is hermitian
+			# print(G[qq])
+			print("Matrix is Hermitian, and Determinant is=",np.linalg.det(G[qq]))
+		else:
+			# print("Matrix is NOT Hermitian\n",np.conj(G)==G)
+			print("Matrix is NOT Hermitian for q_n=",qq)
+			# print "G.conj is :\n",np.conj(G[qq])
+			print("G is :\n",G[qq][0])
+			print("G is :\n",G[qq][1])
+			print("G is :\n",G[qq][2])
+			#exit()
 	# 	phi = k_B * T* G
 	# else:
 
@@ -199,7 +210,8 @@ def eigenfreqs(phi_ft,nuq,M=1.):
 	D = 1/np.sqrt(M*M)* phi_ft
 	omega_sq = np.zeros((nuq,3),dtype='float64')
 	for qq in prange(nuq):
-		eigenvals,eigenvecs = np.linalg.eigh(D[qq])
+		# eigenvals,eigenvecs = np.linalg.eigh(D[qq])
+		eigenvals = np.linalg.eigvals(D[qq])
 		print("== EIGENVALUES ==\n",eigenvals)
 		omega_sq[qq] = eigenvals
 	print("succeed")
@@ -223,10 +235,12 @@ def main():
 	global Natoms
 	global Natoms_root_rev
 	global Nframes
-	global traj_for_FT
+	global nuq
 
-	had_run_before = False
-	# had_run_before = True
+	load_previous_calculation = False
+	# load_previous_calculation = True
+	load_loaded_traj=True
+	# load_loaded_traj=False
 
 	# set some initial values
 	a = 1.587401 # cubic constant in sigma units
@@ -243,18 +257,27 @@ def main():
 
 	# pt = highsymm_path(np.array([K,gamma,L,W,X,U,X,gamma]),l) # make a path of all points
 	# pgp = np.array([1,7])*l[0]  # position of gamma points for ASR  Manually for the time being! ==> Just put index of where gamma points is in pt.
+	# plot_ticks = ['K', r'$\Gamma$', 'L', 'W', 'X', 'U', 'X', r'$\Gamma$']
 
 	pt = highsymm_path(np.array([gamma,X,W,K,gamma,L]),l) # make a path of all points
 	pgp = np.array([0,4])*l[0]  # position of gamma points for ASR  Manually for the time being! ==> Just put index of where gamma points is in pt.
+	plot_ticks = [r'$\Gamma$', 'X', 'W', 'K',r'$\Gamma$', 'L']
 
 
-	plot_ticks = ['K', r'$\Gamma$','L','W','X','U','X',r'$\Gamma$']
 	nuq = pt.shape[0]  # Total number of all points
 	print("number of q points=",nuq)
 
 
-	if had_run_before==False:
-		traj,Natoms,Nframes = read_xyz()
+	if load_previous_calculation==False:
+		if load_loaded_traj ==False:
+			traj,Natoms,Nframes = read_xyz()
+			np.savez(folder_path+'temp_traj', traj=traj, Natoms=Natoms, Nframes=Nframes)
+		elif load_loaded_traj == True:
+			npz_file = np.load(folder_path+'temp_traj.npz')
+			traj =    npz_file['traj']
+			Natoms =  npz_file['Natoms']
+			Nframes = npz_file['Nframes']
+			print("file is loaded!")
 		Natoms_root_rev = 1.0/np.sqrt(Natoms)
 		traj_for_FT = traj[0, :, 1:]
 		traj =  traj[traj.shape[0]*skip_portion/100:,:,1:]
@@ -263,7 +286,7 @@ def main():
 
 
 		# MAIN engine
-		G_ft = greens_func(traj, pt)     # Calculates green function
+		G_ft = greens_func(traj, traj_for_FT,pt)     # Calculates green function
 		phi_ft = force_constants(G_ft)   # Calculates force matrix in reciprocal space
 		phi_ft=ASR(phi_ft,pgp,nucell=1)            # Apply ASR
 		freqs = eigenfreqs(phi_ft,nuq)   # Calculates eigen values which is frequencies
@@ -273,13 +296,13 @@ def main():
 		np.save(folder_path+'temp_pt', pt)
 		np.save(folder_path+'temp_freqs',freqs)
 
-	elif had_run_before==True:
+	elif load_previous_calculation==True:
 		pt= np.load(folder_path+'temp_pt.npy', allow_pickle=True)
 		freqs= np.load(folder_path+'temp_freqs.npy', allow_pickle=True)
 
 
 	pt_diff =np.linalg.norm(np.diff(pt,axis=0),axis=1)
-	print pt_diff
+	# print pt_diff
 	X=[0]
 	plot_ticks_pos = [0]
 	for ii in range(pt_diff.shape[0]):
@@ -292,7 +315,7 @@ def main():
 	plt.plot(X, freqs[:, 0],'o-',color='black')
 	plt.plot(X, freqs[:, 1],'o-',color='black')
 	plt.plot(X, freqs[:, 2],'o-',color='black')
-	print(plot_ticks_pos,plot_ticks)
+	# print(plot_ticks_pos,plot_ticks)
 	plt.xticks(plot_ticks_pos,plot_ticks)
 	plt.show()
 	plt.savefig(folder_path+"test.pdf")
