@@ -235,8 +235,8 @@ def main():
 	global Nframes
 	global nuq
 
-	load_previous_calculation = False
-	# load_previous_calculation = True
+	# load_previous_calculation = False
+	load_previous_calculation = True
 	load_loaded_traj=True
 	# load_loaded_traj=False
 
