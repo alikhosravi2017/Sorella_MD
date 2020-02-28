@@ -8,3 +8,5 @@ __pycache__/
 *$py.class
 .DS_Store
 .directory
+# pycharm
+.idea
