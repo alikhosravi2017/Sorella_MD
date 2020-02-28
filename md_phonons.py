@@ -11,15 +11,16 @@ from numba import njit,prange
 plt.style.use('ggplot')
 
 # parameters
-k_B = 1
-T =1
 folder_path='with_lammps/'
 # folder_path=''
-trajectory_file = "traj_lammps.xyz"
+save_flag= '_10K_1fs'
+trajectory_file = "traj_lammps_10K_1fs.xyz"
 # trajectory_file = "traj_unwrapped.xyz"
 
-
-
+sigma_true = 3.4e-10  # m ## This is necessarily to get rid of lj units
+kB_true = 1.38064852e-23  #m2 kg s-2 K-1
+T = 10
+mass = 6.6335209e-26  #kg
 # notation
 # l,l' -> refers to the unit cell in the supercell
 # k,k' -> runs over all Natoms
@@ -111,12 +112,12 @@ def exponential_term(traj_0,pt):
 	exponentials = np.zeros((nuq, Natoms), dtype="complex_")
 	for ii in range(nuq):
 		exponentials[ii] = np.exp(-1j * np.sum(pt[ii] * traj_0, axis=1))
-	print("exponential calculated")
+	print("exponentials calculated")
 	return exponentials
 
 
 
-def FT(POS,exponentials):
+def FT(POS,exponentials,pt):
 	'''
 	Calculate Fourier transform of position. ONLY for 1 FRAME
 	:param traj: in this dimension: POS[natom,3]
@@ -127,12 +128,15 @@ def FT(POS,exponentials):
 	kir = np.zeros((nuq,3),dtype = "complex_")
 	if len(POS.shape) == 2:
 		for ii in range(nuq):
-			# qq = pt[ii]
-			# exponential = np.exp(-1j * np.sum(qq * traj_for_FT, axis=1))
+			# exponential = np.exp(-1j * np.sum(pt[ii] * POS, axis=1))
 			# print  np.sum(POS[:,0] * exponential)
-			kir[ii,0] = Natoms_root_rev*np.sum( POS[:,0] * exponentials[ii] )
-			kir[ii,1] = Natoms_root_rev*np.sum( POS[:,1] * exponentials[ii] )
-			kir[ii,2] = Natoms_root_rev*np.sum( POS[:,2] * exponentials[ii] )
+			# kir[ii,0] = Natoms_root_rev*np.sum( POS[:,0] * exponential )
+			# kir[ii,1] = Natoms_root_rev*np.sum( POS[:,1] * exponential )
+			# kir[ii,2] = Natoms_root_rev*np.sum( POS[:,2] * exponential )
+
+			kir[ii,0] = Natoms_root_rev*np.sum( POS[:,0] * exponentials[ii])
+			kir[ii,1] = Natoms_root_rev*np.sum( POS[:,1] * exponentials[ii])
+			kir[ii,2] = Natoms_root_rev*np.sum( POS[:,2] * exponentials[ii])
 	else:   raise ValueError
 	return kir
 
@@ -150,7 +154,7 @@ def greens_func(traj,traj_for_FT,pt):
 	exponentials = exponential_term(traj_for_FT, pt)
 	# For first term
 	for fram in range(Nframes):
-		Rq      =  FT(traj[fram],exponentials)
+		Rq      =  FT(traj[fram],exponentials,pt)
 		Rq_star =  np.conj(Rq)
 		for qq in range(nuq):
 			for alpha in range(3):
@@ -161,7 +165,7 @@ def greens_func(traj,traj_for_FT,pt):
 	print("Green function first term is done!","Time: {:.2f} seconds\n".format(time.time()-t_start))
 	# For Second term
 	R_mean = np.mean(traj,axis=0)
-	R_mean_q = FT(R_mean,exponentials)
+	R_mean_q = FT(R_mean,exponentials,pt)
 	R_mean_q_star = np.conj(R_mean_q)
 
 	for qq in range(nuq):
@@ -198,14 +202,15 @@ def force_constants(G):
 	#### FROM EQ. 17 of the phonons paper
 	Phi = np.zeros(G.shape,dtype='complex128') # ka, k'b
 	for qq in range(G.shape[0]):
-		Phi[qq] = k_B*T *np.linalg.inv(G[qq])
+		Phi[qq] = np.linalg.inv(G[qq])
 	####
 	return Phi
 
 
-def eigenfreqs(phi_ft,nuq,M=1.):
+def eigenfreqs(phi_ft,nuq):
 
-	D = 1/np.sqrt(M*M)* phi_ft
+	# D = 1/np.sqrt(M*M)* phi_ft
+	D = phi_ft
 	omega_sq = np.zeros((nuq,3),dtype='float64')
 	for qq in prange(nuq):
 		# eigenvals,eigenvecs = np.linalg.eigh(D[qq])
@@ -235,14 +240,15 @@ def main():
 	global Nframes
 	global nuq
 
-	# load_previous_calculation = False
-	load_previous_calculation = True
-	load_loaded_traj=True
-	# load_loaded_traj=False
+
+	load_previous_calculation = False
+	# load_previous_calculation = True
+	# load_loaded_traj=True
+	load_loaded_traj=False
 
 	# set some initial values
-	a = 1.587401 # cubic constant in sigma units
-	skip_portion =  30 #skip this percent of total time step at the begining
+	a = np.power(2,(2./3)) # cubic constant in sigma units
+	skip_portion =  10 #skip this percent of total time step at the begining
 	l = np.array([3, 3, 3])  # lattice size in each direction. THEY MUST BE EQUAL!
 
 	# Defining high symmetry points in Kx,Ky,Kz direction ref of the path: http://lampx.tugraz.at/~hadley/ss1/bzones/fcc.php
@@ -269,19 +275,18 @@ def main():
 	if load_previous_calculation==False:
 		if load_loaded_traj ==False:
 			traj,Natoms,Nframes = read_xyz()
-			np.savez(folder_path+'temp_traj', traj=traj, Natoms=Natoms, Nframes=Nframes)
+			np.savez(folder_path+'temp_traj'+save_flag, traj=traj, Natoms=Natoms, Nframes=Nframes)
 		elif load_loaded_traj == True:
-			npz_file = np.load(folder_path+'temp_traj.npz')
+			npz_file = np.load(folder_path+'temp_traj'+save_flag+'.npz')
 			traj =    npz_file['traj']
 			Natoms =  npz_file['Natoms']
 			Nframes = npz_file['Nframes']
 			print("file is loaded!")
 		Natoms_root_rev = 1.0/np.sqrt(Natoms)
-		traj_for_FT = traj[0, :, 1:]
+		# traj_for_FT = traj[0, :, 1:]
 		traj =  traj[traj.shape[0]*skip_portion/100:,:,1:]
+		traj_for_FT = np.mean(traj, axis=0)
 		Nframes = traj.shape[0]
-
-
 
 		# MAIN engine
 		G_ft = greens_func(traj, traj_for_FT,pt)     # Calculates green function
@@ -291,13 +296,16 @@ def main():
 		print(" == FREQUENCIES (omega(q)) ==\n",freqs)
 
 		# Save everything, if you wanted to change a little thing in plots
-		np.save(folder_path+'temp_pt', pt)
-		np.save(folder_path+'temp_freqs',freqs)
+		np.save(folder_path+'temp_pt'+save_flag, pt)
+		np.save(folder_path+'temp_freqs'+save_flag,freqs)
 
 	elif load_previous_calculation==True:
-		pt= np.load(folder_path+'temp_pt.npy', allow_pickle=True)
-		freqs= np.load(folder_path+'temp_freqs.npy', allow_pickle=True)
+		pt= np.load(folder_path+'temp_pt'+save_flag+'.npy', allow_pickle=True)
+		freqs= np.load(folder_path+'temp_freqs'+save_flag+'.npy', allow_pickle=True)
 
+
+	## Convert to SI units ==>>Hz
+	freqs *= np.sqrt(kB_true*T/(mass*sigma_true*sigma_true) )
 
 	## project the path to 2D plot
 	pt_diff =np.linalg.norm(np.diff(pt,axis=0),axis=1)
@@ -311,13 +319,15 @@ def main():
 			plot_ticks_pos.append(x)
 
 	print(freqs)
-	plt.plot(X, freqs[:, 0],'o-',color='black')
-	plt.plot(X, freqs[:, 1],'o-',color='black')
-	plt.plot(X, freqs[:, 2],'o-',color='black')
+	plt.plot(X, freqs[:, 0]*1e-12,'o',color='black')
+	plt.plot(X, freqs[:, 1]*1e-12,'o',color='black')
+	plt.plot(X, freqs[:, 2]*1e-12,'o',color='black')
 	# print(plot_ticks_pos,plot_ticks)
 	plt.xticks(plot_ticks_pos,plot_ticks)
+	plt.ylabel('THz')
+	plt.savefig(folder_path+"test"+save_flag+".png")
 	plt.show()
-	plt.savefig(folder_path+"test.png")
+
 
 
 
