@@ -142,11 +142,9 @@ def greens_func(traj,traj_for_FT,pt):
 	"""	Takes the Fourier transform of the absolute positions for a given vector.
 	Averages all frames and calculates the FT Green's function coeffs at each 
 	wave vector q."""
-	# Nframes = G.shape[0]
-	# Natoms = G.shape[1]
 	# R_ka = np.mean(traj,axis=0) # average over all frames
 
-	G_ft = np.zeros((len(pt),3,3),dtype='complex128') # ka, k'b
+	G_ft = np.zeros((nuq,3,3),dtype='complex128') # ka, k'b
 
 	# Calculate exponential term necessarily for FT calculation
 	exponentials = exponential_term(traj_for_FT, pt)
@@ -154,19 +152,19 @@ def greens_func(traj,traj_for_FT,pt):
 	for fram in range(Nframes):
 		Rq      =  FT(traj[fram],exponentials)
 		Rq_star =  np.conj(Rq)
-		for qq in range(len(pt)):
+		for qq in range(nuq):
 			for alpha in range(3):
 				for beta in range(3):
 					G_ft[qq,alpha,beta]+= Rq[qq,alpha]*Rq_star[qq,beta]
 					# print G_ft[qq]
-	G_ft*(1.0/Nframes)
+	G_ft=G_ft*(1.0/Nframes)
 	print("Green function first term is done!","Time: {:.2f} seconds\n".format(time.time()-t_start))
 	# For Second term
 	R_mean = np.mean(traj,axis=0)
 	R_mean_q = FT(R_mean,exponentials)
 	R_mean_q_star = np.conj(R_mean_q)
 
-	for qq in range(len(pt)):
+	for qq in range(nuq):
 		for alpha in range(3):
 			for beta in range(3):
 				G_ft[qq,alpha, beta] -= R_mean_q[qq, alpha] * R_mean_q_star[qq, beta]
@@ -301,6 +299,7 @@ def main():
 		freqs= np.load(folder_path+'temp_freqs.npy', allow_pickle=True)
 
 
+	## project the path to 2D plot
 	pt_diff =np.linalg.norm(np.diff(pt,axis=0),axis=1)
 	# print pt_diff
 	X=[0]
@@ -318,7 +317,7 @@ def main():
 	# print(plot_ticks_pos,plot_ticks)
 	plt.xticks(plot_ticks_pos,plot_ticks)
 	plt.show()
-	plt.savefig(folder_path+"test.pdf")
+	plt.savefig(folder_path+"test.png")
 
 
 
