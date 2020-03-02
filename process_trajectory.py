@@ -17,6 +17,7 @@ def read_xyz(pos=fpath):
 		lines = f.readlines()
 		Natoms = int(lines[0])
 		Nframes = int(len(lines)/(Natoms+2))
+		print(Natoms,Nframes)
 		for i in range(Natoms+2):
 			if i>1:
 				atoms.append([str(ln) for ln in lines[i].split()][0])
@@ -60,4 +61,5 @@ def process_xyz(lines,Natoms,Nframes,save=True):
 if __name__ == '__main__':
 	raw_traj,Natoms,Nframes = read_xyz()
 	traj = process_xyz(raw_traj,Natoms,Nframes)
+	print(traj)
 

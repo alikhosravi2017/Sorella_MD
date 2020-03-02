@@ -54,7 +54,7 @@ mass = 6.6335209e-26  #kg
 def mean(arr):
 	summation = np.zeros((arr.shape[1],arr.shape[2]),dtype=np.complex128)
 	for j in prange(arr.shape[1]):
-		for frame in prange(arr.shape[0]):
+		for frame in range(arr.shape[0]):
 			summation[j,:] += arr[frame,j,:]
 		summation[j,:] /= arr.shape[0]
 	return summation
@@ -198,8 +198,8 @@ def greens_func(traj,traj_for_FT,pt):
 	R_mean_q_star = np.conj(R_mean_q)
 
 	for qq in prange(nuq):
-		for alpha in prange(3):
-			for beta in prange(3):
+		for alpha in range(3):
+			for beta in range(3):
 				G_ft[qq,alpha, beta] -= R_mean_q[qq, alpha] * R_mean_q_star[qq, beta]
 
 	# print("Green function Second term is done!","Time (seconds): ",time.time()-t_start)
@@ -207,14 +207,14 @@ def greens_func(traj,traj_for_FT,pt):
 	print("G_ft.shape=",G_ft.shape)
 	return G_ft
 
-# @njit(parallel=True)
-def force_constants(G):
-	""" Calculates force constants $\Phi_{lk\alpha,l'k'\beta}$ """
-	# phi = np.zeros(np.shape(G))
-	# check if G is hermitian 
-	# !! PROBLEM should check for all atoms separately
-	for qq in prange(G.shape[0]):
-		if (np.round(np.transpose(np.conj(G[qq])),4)==np.round(G[qq],4)).all(): # check if G is hermitian
+@njit(parallel=True)
+def check_hermiticity(G):
+	"""	check if G is hermitian 
+	!! PROBLEM should check for all atoms separately"""
+	for qq in prange(nuq):
+		# condition_real = (np.round(np.real(G[qq]),5)==np.round(np.real(np.conj(G[qq])),5)).all() # redundant
+		condition_imag = (np.round(np.imag(G[qq]),5)==np.round(np.imag(np.conj(G[qq])),5)).all()
+		if condition: # check if G is hermitian
 			# print(G[qq])
 			print("Matrix is Hermitian, and Determinant is=",np.linalg.det(G[qq]))
 		else:
@@ -224,36 +224,46 @@ def force_constants(G):
 			print("G is :\n",G[qq][0])
 			print("G is :\n",G[qq][1])
 			print("G is :\n",G[qq][2])
+			raise ValueError("Matrix is NOT Hermitian")
 			#exit()
-	# 	phi = k_B * T* G
-	# else:
+	return None
 
-	#### FROM EQ. 17 of the phonons paper
+@njit(parallel=True)
+def force_constants(G):
+	""" Calculates force constants $\Phi_{lk\alpha,l'k'\beta}$ """
+	# phi = np.zeros(np.shape(G))
+
+	# check_hermiticity(G)
+
 	Phi = np.zeros(G.shape,dtype=np.complex128) # ka, k'b
-	for qq in range(G.shape[0]):
+
+	for qq in prange(nuq):
+		# print(G[qq])
 		Phi[qq] = np.linalg.inv(G[qq])
 	####
 	return Phi
 
-# @njit(parallel=True)
+@njit(parallel=True)
 def eigenfreqs(phi_ft,nuq):
 	# D = 1/np.sqrt(M*M)* phi_ft
 	D = phi_ft
 	omega_sq = np.zeros((nuq,3),dtype=np.float64)
+	eigenvals_real = np.zeros(3,dtype=np.float64)
 	for qq in prange(nuq):
 		# eigenvals,eigenvecs = np.linalg.eigh(D[qq])
 		eigenvals = np.linalg.eigvals(D[qq])
-		eidx = eigenvals.argsort()[::-1]   # sorting from smallest to largest
-		eigenvals = eigenvals[eidx]
+		eigenvals_real = np.real(eigenvals)
+		# eidx = eigenvals_real.argsort()[::-1]   # sorting from smallest to largest
+		# eigenvals = eigenvals_real[eidx]
 		print("== EIGENVALUES ==\n",eigenvals)
-		omega_sq[qq] = eigenvals
+		omega_sq[qq] = eigenvals_real
 	print("Success!")
 	## Convert to SI units ==>>Hz
 	omega_sq *= kB_true*T/(mass*sigma_true*sigma_true)
 	print("Frequencies converted to Hz")
 	return np.sqrt(omega_sq)
 
-# @njit(parallel=False)
+@njit(parallel=False)
 def ASR(phi,pgp,nucell):
 	"""
 	:param phi: is Force matrix at q=0
@@ -335,6 +345,7 @@ def main():
 
 	# MAIN engine
 	G_ft = greens_func(traj, traj_for_FT,pt)     # Calculates green function
+	
 	phi_ft = force_constants(G_ft)   # Calculates force matrix in reciprocal space
 	phi_ft=ASR(phi_ft,pgp,nucell=1)            # Apply ASR
 	freqs = eigenfreqs(phi_ft,nuq)   # Calculates eigen values which is frequencies
@@ -365,9 +376,9 @@ def main():
 			plot_ticks_pos.append(x)
 
 	print(freqs)
-	plt.plot(X, freqs[:, 0]*1e-12,'o',color='black')
-	plt.plot(X, freqs[:, 1]*1e-12,'o',color='black')
-	plt.plot(X, freqs[:, 2]*1e-12,'o',color='black')
+	plt.plot(X, freqs[:, 0]*1e-12,'o-')
+	plt.plot(X, freqs[:, 1]*1e-12,'o-')
+	plt.plot(X, freqs[:, 2]*1e-12,'o-')
 	# print(plot_ticks_pos,plot_ticks)
 	plt.xticks(plot_ticks_pos,plot_ticks)
 	plt.ylabel('THz')
