@@ -50,6 +50,7 @@ mass = 6.6335209e-26  #kg
 # def np_mean(array, axis):
 #   return np_apply_along_axis(np.mean, axis, array)
 
+
 @njit(parallel=True)
 def mean(arr):
 	summation = np.zeros((arr.shape[1],arr.shape[2]),dtype=np.complex128)
@@ -93,7 +94,7 @@ def mean(arr):
 # 	return traj,Natoms,Nframes
 
 
-# @njit()
+@njit()
 def equidist(p1, p2, npoints=20):
 	""" Creates an array of equidistant points between two N-dim points."""
 	temp = np.zeros((npoints,p1.shape[0]),dtype=np.float64)
@@ -212,9 +213,9 @@ def check_hermiticity(G):
 	"""	check if G is hermitian 
 	!! PROBLEM should check for all atoms separately"""
 	for qq in prange(nuq):
-		# condition_real = (np.round(np.real(G[qq]),5)==np.round(np.real(np.conj(G[qq])),5)).all() # redundant
-		condition_imag = (np.round(np.imag(G[qq]),5)==np.round(np.imag(np.conj(G[qq])),5)).all()
-		if condition: # check if G is hermitian
+		condition_real = (np.round(np.real(G[qq]),5)==np.round(np.real(np.conj(G[qq].T)),5)).all() # redundant
+		condition_imag = (np.round(np.imag(G[qq]),5)==np.round(np.imag(np.conj(G[qq].T)),5)).all()
+		if (condition_real and condition_imag): # check if G is hermitian
 			# print(G[qq])
 			print("Matrix is Hermitian, and Determinant is=",np.linalg.det(G[qq]))
 		else:
@@ -233,7 +234,7 @@ def force_constants(G):
 	""" Calculates force constants $\Phi_{lk\alpha,l'k'\beta}$ """
 	# phi = np.zeros(np.shape(G))
 
-	# check_hermiticity(G)
+	check_hermiticity(G)
 
 	Phi = np.zeros(G.shape,dtype=np.complex128) # ka, k'b
 
@@ -345,7 +346,7 @@ def main():
 
 	# MAIN engine
 	G_ft = greens_func(traj, traj_for_FT,pt)     # Calculates green function
-	
+
 	phi_ft = force_constants(G_ft)   # Calculates force matrix in reciprocal space
 	phi_ft=ASR(phi_ft,pgp,nucell=1)            # Apply ASR
 	freqs = eigenfreqs(phi_ft,nuq)   # Calculates eigen values which is frequencies
