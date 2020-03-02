@@ -3,7 +3,7 @@ import numpy as np
 import time
 t_start = time.time()
 print("start","Time: 0 seconds\n")
-from mpl_toolkits.mplot3d import Axes3D
+# from mpl_toolkits.mplot3d import Axes3D
 import matplotlib.pyplot as plt
 from numba import njit,prange
 
@@ -204,7 +204,7 @@ def greens_func(traj,traj_for_FT,pt):
 	print("G_ft.shape=",G_ft.shape)
 	return G_ft
 
-@njit(parallel=True)
+# @njit(parallel=True)
 def check_hermiticity(G):
 	"""	check if G is hermitian 
 	!! PROBLEM should check for all atoms separately"""
@@ -250,8 +250,8 @@ def eigenfreqs(phi_ft,nuq):
 		# eigenvals,eigenvecs = np.linalg.eigh(D[qq])
 		eigenvals = np.linalg.eigvals(D[qq])
 		eigenvals_real = np.real(eigenvals)
-		# eidx = eigenvals_real.argsort()[::-1]   # sorting from smallest to largest
-		# eigenvals = eigenvals_real[eidx]
+		eidx = eigenvals_real.argsort()[::-1]   # sorting from smallest to largest
+		eigenvals_real = eigenvals_real[eidx]
 		print("== EIGENVALUES ==\n",eigenvals)
 		omega_sq[qq] = eigenvals_real
 	print("Success!")
@@ -352,6 +352,8 @@ def main():
 
 
 	print(freqs)
+	np.savetxt('dispersion.dat',np.array([X, freqs[:, 0]*1e-12,freqs[:, 1]*1e-12,freqs[:, 2]*1e-12]).T)
+	
 	plt.plot(X, freqs[:, 0]*1e-12,'o-')
 	plt.plot(X, freqs[:, 1]*1e-12,'o-')
 	plt.plot(X, freqs[:, 2]*1e-12,'o-')
