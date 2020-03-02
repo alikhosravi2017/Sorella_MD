@@ -234,7 +234,7 @@ def force_constants(G):
 	""" Calculates force constants $\Phi_{lk\alpha,l'k'\beta}$ """
 	# phi = np.zeros(np.shape(G))
 
-	check_hermiticity(G)
+	# check_hermiticity(G)
 
 	Phi = np.zeros(G.shape,dtype=np.complex128) # ka, k'b
 
