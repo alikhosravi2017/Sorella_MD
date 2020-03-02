@@ -58,38 +58,38 @@ def mean(arr):
 			summation[j,:] += arr[frame,j,:]
 	return summation
 
-def read_xyz(pos=folder_path+trajectory_file):
-	""" Reads .xyz file and create a frame-indexed trajectory array."""
-	with open(pos,"r") as f:
-		Natoms,Nframes = 0,0
-		lines = f.readlines()
-		frame = 0
-		k = 0
-		counter = 0
-		traj_built_flag = True
-		for idx,ln in enumerate(lines):
-			if counter==0:
-				if traj_built_flag :
-					Natoms = int(ln)
-					Nframes = int(len(lines)/(Natoms+2))
-					traj = np.zeros((Nframes,Natoms,4),dtype=np.float64)
-					traj_built_flag = False
-				counter += 1
-			elif counter==1:
-				k = 0 # atom idx
-				counter +=1 
-			elif counter>1:
-				# print [float(l) for l in ln.split()]
-				traj[frame,k,:] = [float(l) for l in ln.split()]
-				# print traj[frame,k,:]
-				k += 1
-				counter += 1
-				if counter==(Natoms+2):
-					# print Natoms, ln
-					counter = 0
-					frame += 1
-	print("Trajectory read!","Time (seconds): ",time.time()-t_start)
-	return traj,Natoms,Nframes
+# def read_xyz(pos=folder_path+trajectory_file):
+# 	""" Reads .xyz file and create a frame-indexed trajectory array."""
+# 	with open(pos,"r") as f:
+# 		Natoms,Nframes = 0,0
+# 		lines = f.readlines()
+# 		frame = 0
+# 		k = 0
+# 		counter = 0
+# 		traj_built_flag = True
+# 		for idx,ln in enumerate(lines):
+# 			if counter==0:
+# 				if traj_built_flag :
+# 					Natoms = int(ln)
+# 					Nframes = int(len(lines)/(Natoms+2))
+# 					traj = np.zeros((Nframes,Natoms,4),dtype=np.float64)
+# 					traj_built_flag = False
+# 				counter += 1
+# 			elif counter==1:
+# 				k = 0 # atom idx
+# 				counter +=1 
+# 			elif counter>1:
+# 				# print [float(l) for l in ln.split()]
+# 				traj[frame,k,:] = [float(l) for l in ln.split()]
+# 				# print traj[frame,k,:]
+# 				k += 1
+# 				counter += 1
+# 				if counter==(Natoms+2):
+# 					# print Natoms, ln
+# 					counter = 0
+# 					frame += 1
+# 	print("Trajectory read!","Time (seconds): ",time.time()-t_start)
+# 	return traj,Natoms,Nframes
 
 
 # @njit()
@@ -243,6 +243,8 @@ def eigenfreqs(phi_ft,nuq):
 	for qq in prange(nuq):
 		# eigenvals,eigenvecs = np.linalg.eigh(D[qq])
 		eigenvals = np.linalg.eigvals(D[qq])
+		eidx = eigenvals.argsort()[::-1]   # sorting from smallest to largest
+		eigenvals = eigenvals[eidx]
 		print("== EIGENVALUES ==\n",eigenvals)
 		omega_sq[qq] = eigenvals
 	print("Success!")
