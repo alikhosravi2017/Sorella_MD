@@ -53,9 +53,10 @@ mass = 6.6335209e-26  #kg
 @njit(parallel=True)
 def mean(arr):
 	summation = np.zeros((arr.shape[1],arr.shape[2]),dtype=np.complex128)
-	for frame in prange(arr.shape[0]):
-		for j in prange(arr.shape[1]):
+	for j in prange(arr.shape[1]):
+		for frame in prange(arr.shape[0]):
 			summation[j,:] += arr[frame,j,:]
+		summation[j,:] /= arr.shape[0]
 	return summation
 
 # def read_xyz(pos=folder_path+trajectory_file):
@@ -216,7 +217,6 @@ def force_constants(G):
 		if (np.round(np.transpose(np.conj(G[qq])),4)==np.round(G[qq],4)).all(): # check if G is hermitian
 			# print(G[qq])
 			print("Matrix is Hermitian, and Determinant is=",np.linalg.det(G[qq]))
-			if 
 		else:
 			# print("Matrix is NOT Hermitian\n",np.conj(G)==G)
 			print("Matrix is NOT Hermitian for q_n=",qq)
