@@ -12,8 +12,9 @@ plt.style.use('ggplot')
 
 # parameters
 folder_path='with_lammps/'
-save_flag= '_10K_1fs'
-trajectory_file = "traj_lammps_10K_1fs.xyz"
+save_flag= '_10K_1fs_4_4_4'
+# trajectory_file = "traj_lammps_10K_1fs.xyz"
+trajectory_file = "traj_lammps_10K_1fs_4_4_4.xyz"
 # folder_path=''
 # save_flag= ''
 # trajectory_file = "traj_unwrapped.xyz"
@@ -104,20 +105,21 @@ def equidist(p1, p2, npoints=20):
 	return temp
 
 # @njit()
-def highsymm_path(symm_points,l):
+def highsymm_path(symm_points,l,K_step):
 	""" Generates high symmetry path 
 	along the given points."""
 
-	# K_step = 2 * np.pi / (a * l[0])
-	l0_rev = 1.0 / l[0]
-
-	folder_pathdiff_symm_points = np.diff(symm_points, axis=0)
+	gamma = np.array([0, 0, 0])
+	diff_symm_points = np.diff(symm_points, axis=0)
 	path = np.array(symm_points[0],ndmin=2)
-	for ii in range(folder_pathdiff_symm_points.shape[0]):
-		for jj in range(l[0]):
-			path = np.append(path,[path[-1] + folder_pathdiff_symm_points[ii] * l0_rev], axis=0)
-
-	return path
+	pgp=np.array([0]) if (symm_points[0]==gamma).all() else np.array([],ndmin=1)
+	for ii in range(diff_symm_points.shape[0]):
+		symmetry_point_linear_displacement = np.max(np.abs(diff_symm_points[ii]))
+		steps=int(np.round(symmetry_point_linear_displacement/K_step))
+		if (symm_points[ii+1] == gamma).all(): pgp=np.append(pgp,path.shape[0]+steps-1)
+		for jj in range(steps):
+			path = np.append(path,[path[-1] + diff_symm_points[ii] * 1.0 / steps], axis=0)
+	return path, pgp
 
 
 def plot_disp(bands):
@@ -155,12 +157,6 @@ def FT(POS,exponentials,pt):
 		raise ValueError
 
 	for ii in prange(nuq):
-		# exponential = np.exp(-1j * np.sum(pt[ii] * POS, axis=1))
-		# print  np.sum(POS[:,0] * exponential)
-		# kir[ii,0] = Natoms_root_rev*np.sum( POS[:,0] * exponential )
-		# kir[ii,1] = Natoms_root_rev*np.sum( POS[:,1] * exponential )
-		# kir[ii,2] = Natoms_root_rev*np.sum( POS[:,2] * exponential )
-
 		kir[ii,0] = Natoms_root_rev*np.sum( POS[:,0] * exponentials[ii])
 		kir[ii,1] = Natoms_root_rev*np.sum( POS[:,1] * exponentials[ii])
 		kir[ii,2] = Natoms_root_rev*np.sum( POS[:,2] * exponentials[ii])
@@ -293,8 +289,9 @@ def main():
 	# set some initial values
 	a = np.power(2,(2./3)) # cubic constant in sigma units
 	skip_portion =  10 #skip this percent of total time step at the begining
-	l = np.array([3, 3, 3])  # lattice size in each direction. THEY MUST BE EQUAL!
-
+	l = np.array([4, 4, 4])  # lattice size in each direction. THEY MUST BE EQUAL!
+	K_step = 2 * np.pi / (a * l[0])
+	# print K_step
 	# Defining high symmetry points in Kx,Ky,Kz direction ref of the path: http://lampx.tugraz.at/~hadley/ss1/bzones/fcc.php
 	gamma = np.array([0,0,0])
 	X = np.array([0,2*np.pi/a,0])
@@ -306,30 +303,15 @@ def main():
 	# pt = highsymm_path(np.array([K,gamma,L,W,X,U,X,gamma]),l) # make a path of all points
 	# pgp = np.array([1,7])*l[0]  # position of gamma points for ASR  Manually for the time being! ==> Just put index of where gamma points is in pt.
 	# plot_ticks = ['K', r'$\Gamma$', 'L', 'W', 'X', 'U', 'X', r'$\Gamma$']
-
-	pt = highsymm_path(np.array([gamma,X,W,K,gamma,L]),l) # make a path of all points
-	pgp = np.array([0,4])*l[0]  # position of gamma points for ASR  Manually for the time being! ==> Just put index of where gamma points is in pt.
+	symm_points = np.array([gamma, X, W, K, gamma, L])
+	pt,pgp = highsymm_path(symm_points,l,K_step) # make a path of all points
+	# pgp = np.array([0,4])  # position of gamma points for ASR  Manually for the time being! ==> Just put index of where gamma points is in pt.
 	plot_ticks = [r'$\Gamma$', 'X', 'W', 'K',r'$\Gamma$', 'L']
-
+	print("pgp=",pgp)
 
 	nuq = pt.shape[0]  # Total number of all points
 	print("number of q points=",nuq)
 
-
-	# if load_previous_calculation==False:
-	# 	if load_loaded_traj ==False:
-	# 		# traj,Natoms,Nframes = read_xyz()
-	# 		traj = np.load(folder_path+trajectory_file.split(".")[0]+'.npy')
-	# 		Natoms = traj.shape[1]
-	# 		Nframes = traj.shape[0]
-	# 		# np.savez(folder_path+'temp_traj'+save_flag, traj=traj, Natoms=Natoms, Nframes=Nframes)
-	# 	elif load_loaded_traj == True:
-	# 		raise Exception("Disabled saving loaded trajectory.")
-	# 		npz_file = np.load(folder_path+'temp_traj'+save_flag+'.npz')
-	# 		traj =    npz_file['traj']
-	# 		Natoms =  npz_file['Natoms']
-	# 		Nframes = npz_file['Nframes']
-	# 		print("file loaded!")
 
 	# !!! new traj system
 	traj = np.load(folder_path+trajectory_file.split(".")[0]+'.npy')
@@ -356,25 +338,18 @@ def main():
 	np.save(folder_path+'temp_pt'+save_flag, pt)
 	np.save(folder_path+'temp_freqs'+save_flag,freqs)
 
-	# !!! disabling loading previous calc for the time being
-
-	# elif load_previous_calculation==True:
-	# 	pt= np.load(folder_path+'temp_pt'+save_flag+'.npy', allow_pickle=True)
-	# 	freqs= np.load(folder_path+'temp_freqs'+save_flag+'.npy', allow_pickle=True)
-
-
-
-
 	## project the path to 2D plot
 	pt_diff =np.linalg.norm(np.diff(pt,axis=0),axis=1)
+	diff_symm_points = np.diff(symm_points, axis=0)
 	# print pt_diff
 	X=[0]
 	plot_ticks_pos = [0]
 	for ii in range(pt_diff.shape[0]):
 		x=X[ii]+pt_diff[ii]
 		X.append(x)
-		if (ii+1)%3==0:
-			plot_ticks_pos.append(x)
+	for ii in range(diff_symm_points.shape[0]):
+		plot_ticks_pos.append(plot_ticks_pos[-1]+np.linalg.norm(diff_symm_points[ii]))
+
 
 	print(freqs)
 	plt.plot(X, freqs[:, 0]*1e-12,'o-')
