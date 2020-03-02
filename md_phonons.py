@@ -13,8 +13,8 @@ plt.style.use('ggplot')
 # parameters
 folder_path='with_lammps/'
 save_flag= '_10K_1fs_4_4_4'
-# trajectory_file = "traj_lammps_10K_1fs.xyz"
-trajectory_file = "traj_lammps_10K_1fs_4_4_4.xyz"
+trajectory_file = "traj_lammps_10K_1fs.xyz"
+# trajectory_file = "traj_lammps_10K_1fs_4_4_4.xyz"
 # folder_path=''
 # save_flag= ''
 # trajectory_file = "traj_unwrapped.xyz"
@@ -61,38 +61,6 @@ def mean(arr):
 		summation[j,:] /= arr.shape[0]
 	return summation
 
-# def read_xyz(pos=folder_path+trajectory_file):
-# 	""" Reads .xyz file and create a frame-indexed trajectory array."""
-# 	with open(pos,"r") as f:
-# 		Natoms,Nframes = 0,0
-# 		lines = f.readlines()
-# 		frame = 0
-# 		k = 0
-# 		counter = 0
-# 		traj_built_flag = True
-# 		for idx,ln in enumerate(lines):
-# 			if counter==0:
-# 				if traj_built_flag :
-# 					Natoms = int(ln)
-# 					Nframes = int(len(lines)/(Natoms+2))
-# 					traj = np.zeros((Nframes,Natoms,4),dtype=np.float64)
-# 					traj_built_flag = False
-# 				counter += 1
-# 			elif counter==1:
-# 				k = 0 # atom idx
-# 				counter +=1 
-# 			elif counter>1:
-# 				# print [float(l) for l in ln.split()]
-# 				traj[frame,k,:] = [float(l) for l in ln.split()]
-# 				# print traj[frame,k,:]
-# 				k += 1
-# 				counter += 1
-# 				if counter==(Natoms+2):
-# 					# print Natoms, ln
-# 					counter = 0
-# 					frame += 1
-# 	print("Trajectory read!","Time (seconds): ",time.time()-t_start)
-# 	return traj,Natoms,Nframes
 
 
 @njit()
@@ -351,7 +319,8 @@ def main():
 		plot_ticks_pos.append(plot_ticks_pos[-1]+np.linalg.norm(diff_symm_points[ii]))
 
 
-	print(freqs)
+	print("High Symmetry Points (projected pos): ",plot_ticks_pos)
+
 	np.savetxt('dispersion.dat',np.array([X, freqs[:, 0]*1e-12,freqs[:, 1]*1e-12,freqs[:, 2]*1e-12]).T)
 	
 	plt.plot(X, freqs[:, 0]*1e-12,'o-')
