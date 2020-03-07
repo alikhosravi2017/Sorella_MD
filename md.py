@@ -11,6 +11,7 @@ from ase.build import bulk
 np.random.seed(4) # debug
 
 
+# hardcoded until numba improves support for classes
 def initial_parameteres():
    global Natom,X0, n_a,n_b,n_c,box_sizes,box_half_sizes,Nsteps,cutoff,dump_step,log_step,velocity_zeroing_step,temp_ref,temp_step,Potential_formula,kB_true
    global trajectory_file,trajectory_file_unwrapped, log_file
@@ -22,7 +23,7 @@ def initial_parameteres():
    n_c = 3  #Natoms of primitive cell in c direction
    box_sizes = [0,0,0] # from 0 to L in each direction. will be set, also as global value in premain
    box_half_sizes = 0 # will be set, also as global value in premain
-   Nsteps = 10**4
+   Nsteps = 10**5
    cutoff = 300   #cut off
    dump_step = 100
    log_step = 10
@@ -39,25 +40,24 @@ def initial_parameteres():
    trajectory_file_unwrapped = "traj_unwrapped.xyz"
    log_file = "output.dat"
 
-
-   # if Potential_formula == 'Morse':
    global D0,r0,alpha,electronvolt_to_joules,epsilon_true
-   D0 =  0.3429 # ev  ## D in Morse potential ## FOR Copper ##
-   r0 =  2.866e-10 # meter
-   alpha = 1.3588e10 # 1/meter
-   # map to LJ units in order to avoid changing the code :)
-   electronvolt_to_joules = 1.60218e-19
-   epsilon_true = D0 * electronvolt_to_joules  #J
-   sigma_true = r0   #meter
-   alphar0 = alpha*r0
-   # if Potential_formula == 'LJ':
    global mass,tau,dt
-   epsilon_true = 1.65e-21  #1.977e-21 #J
-   sigma_true = 3.4e-10 #3.348e-10    #m
-   mass = 6.6335209e-26  # kg
-   tau = (1.0)/np.sqrt(epsilon_true/(mass*sigma_true*sigma_true)) # time unit in second
-   dt = 0.001 * 1.0/tau * 1e-12
-   print("time unit is= {0} Seconds\n and timestep={1} femtoseconds".format(tau,tau*dt*1e15))
+   if Potential_formula == 'Morse':
+      D0 =  0.3429 # ev  ## D in Morse potential ## FOR Copper ##
+      r0 =  2.866e-10 # meter
+      alpha = 1.3588e10 # 1/meter
+      # map to LJ units in order to avoid changing the code :)
+      electronvolt_to_joules = 1.60218e-19
+      epsilon_true = D0 * electronvolt_to_joules  #J
+      sigma_true = r0   #meter
+      alphar0 = alpha*r0
+   if Potential_formula == 'LJ':
+      epsilon_true = 1.65e-21  #1.977e-21 #J
+      sigma_true = 3.4e-10 #3.348e-10    #m
+      mass = 6.6335209e-26  # kg
+      tau = (1.0)/np.sqrt(epsilon_true/(mass*sigma_true*sigma_true)) # time unit in second
+      dt = 0.001 * 1.0/tau * 1e-12
+      print("time unit is= {0} Seconds\n and timestep={1} femtoseconds".format(tau,tau*dt*1e15))
    return None
 
 
