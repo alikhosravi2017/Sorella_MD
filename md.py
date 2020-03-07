@@ -44,6 +44,8 @@ def initial_parameteres():
    # epsilon_True = 1.65e-21 #J
    # sigma_True = 3.4e-10    #m
 
+    
+   global force,potential_energy
    global D0,r0,alpha,electronvolt_to_joules,epsilon_true,sigma_true
    global mass,tau,dt
    if Potential_formula == 'Morse':
@@ -55,6 +57,8 @@ def initial_parameteres():
       epsilon_true = D0 * electronvolt_to_joules  #J
       sigma_true = r0   #meter
       alphar0 = alpha*r0
+      force = force_Morse
+      potential_energy = potential_energy_Morse
    if Potential_formula == 'LJ':
       epsilon_true = 1.65e-21  #1.977e-21 #J
       sigma_true = 3.4e-10 #3.348e-10    #m
@@ -62,6 +66,8 @@ def initial_parameteres():
       tau = (1.0)/np.sqrt(epsilon_true/(mass*sigma_true*sigma_true)) # time unit in second
       dt = 0.001 * 1.0/tau * 1e-12
       print("time unit is= {0} Seconds\n and timestep={1} femtoseconds".format(tau,tau*dt*1e15))
+      force = force_LJ
+      potential_energy = potential_energy_LJ
    return None
 
 
@@ -74,29 +80,37 @@ def pbc(X):
 
 @njit(parallel=False)
 def force_LJ(X,F):
+	# disabled numpy vectorization as it slows down the code
     F[:,:] = 0.0
+    # delta = np.zeros(3,dtype=np.float64)
     for i in prange(Natoms):
         for j in prange(i+1,Natoms):
+            # delta[:] = X[i,:]-X[j,:]
             delta_x = X[i,0]-X[j,0]
             delta_y = X[i,1]-X[j,1]
             delta_z = X[i,2]-X[j,2]
-            delta_x += (-1 * box_sizes[0])*np.trunc(delta_x/box_half_sizes[0])
+            # delta[:] += -box_sizes[:]*np.trunc(delta[:]/box_half_sizes[:])
+            delta_x += (-1 * box_sizes[0])*np.trunc(delta_y/box_half_sizes[0])
             delta_y += (-1 * box_sizes[1])*np.trunc(delta_y/box_half_sizes[1])
             delta_z += (-1 * box_sizes[2])*np.trunc(delta_z/box_half_sizes[2])
 
-            r2 = delta_x**2 + delta_y**2 + delta_z**2
+            # r2 = (delta**2).sum()
+            r2 = np.sqrt(delta_x ** 2 + delta_y ** 2 + delta_z ** 2)
             if np.sqrt(r2)<cutoff:
                 f0= 48*(r2**-7 - 0.5*r2**-4)
                 fx = delta_x * f0
                 fy = delta_y * f0
                 fz = delta_z * f0
+
+                # F[i,:] += delta[:]*f0
                 F[i, 0] += fx
                 F[i, 1] += fy
                 F[i, 2] += fz
 
-                F[j, 0] += -fx
-                F[j, 1] += -fy
-                F[j, 2] += -fz
+                # F[j,:] -= delta[:]*f0
+                F[j, 0] -= fx
+                F[j, 1] -= fy
+                F[j, 2] -= fz
     return F
 
 @njit(parallel=False)
@@ -295,13 +309,7 @@ def pre_main():
 
 def main():
     initial_parameteres()
-    global force,potential_energy
-    if Potential_formula=='LJ':
-    	force = force_LJ
-    	potential_energy = potential_energy_LJ
-    elif Potential_formula=='Morse':
-    	force = force_Morse
-    	potential_energy = potential_energy_Morse
+
 
     V,X,F = pre_main()
 
