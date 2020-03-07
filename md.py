@@ -71,20 +71,20 @@ def initial_parameteres():
    return None
 
 
-@njit(parallel=True)
+@njit(parallel=False)
 def pbc(X):
     X[:,0] -= box_sizes[0]*np.floor(X[:,0]/box_sizes[0])
     X[:,1] -= box_sizes[1]*np.floor(X[:,1]/box_sizes[1])
     X[:,2] -= box_sizes[2]*np.floor(X[:,2]/box_sizes[2])
     return X
 
-@njit(parallel=False)
+@njit(parallel=True)
 def force_LJ(X,F):
 	# disabled numpy vectorization as it slows down the code
     F[:,:] = 0.0
     # delta = np.zeros(3,dtype=np.float64)
     for i in prange(Natoms):
-        for j in prange(i+1,Natoms):
+        for j in range(i+1,Natoms):
             # delta[:] = X[i,:]-X[j,:]
             delta_x = X[i,0]-X[j,0]
             delta_y = X[i,1]-X[j,1]
@@ -113,10 +113,10 @@ def force_LJ(X,F):
                 F[j, 2] -= fz
     return F
 
-@njit(parallel=False)
+@njit(parallel=True)
 def force_Morse(X, F):
     F[:, :] = 0.0
-    for i in range(Natoms):
+    for i in prange(Natoms):
         for j in range(i + 1, Natoms):
             delta_x = X[i, 0] - X[j, 0]
             delta_y = X[i, 1] - X[j, 1]
@@ -144,8 +144,8 @@ def force_Morse(X, F):
 
 @njit(parallel=False)
 def potential_energy_LJ(X):
-    E = 0
-    for i in range(Natoms):
+    E = 0.
+    for i in prange(Natoms):
         for j in range(i+1,Natoms):
             delta_x = X[i,0]-X[j,0]
             delta_y = X[i,1]-X[j,1]
@@ -162,7 +162,7 @@ def potential_energy_LJ(X):
 @njit(parallel=False)
 def potential_energy_Morse(X):
     E = 0.
-    for i in range(Natoms):
+    for i in prange(Natoms):
         for j in range(i + 1, Natoms):
             delta_x = X[i, 0] - X[j, 0]
             delta_y = X[i, 1] - X[j, 1]
@@ -176,7 +176,7 @@ def potential_energy_Morse(X):
                 E += np.exp(-2*alphar0 * (r - 1)) - 2 * np.exp(-alphar0*(r - 1))
     return E
 
-@njit(parallel=True)
+@njit()
 def kinetic_energy(V):
     E = .5*np.sum(V**2)
     return E
@@ -193,7 +193,7 @@ def thermostat_velocity_rescaling(V):
     V *= lambda_
     return V
 
-@njit(parallel=True)
+@njit(parallel=False)
 def velocity_verlet(V,X,F_0):
     X += dt*V + F_0*dt*dt/2
     X = pbc(X) # apply periodic boundary conditions
@@ -309,7 +309,6 @@ def pre_main():
 
 def main():
     initial_parameteres()
-
 
     V,X,F = pre_main()
 
