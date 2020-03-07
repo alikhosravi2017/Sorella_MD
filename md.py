@@ -15,7 +15,6 @@ np.random.seed(4) # debug
 def initial_parameteres():
    global Natom,X0, n_a,n_b,n_c,box_sizes,box_half_sizes,Nsteps,cutoff,dump_step,log_step,velocity_zeroing_step,temp_ref,temp_step,Potential_formula,kB_true
    global trajectory_file,trajectory_file_unwrapped, log_file
-   global sigma_true
    Natoms = 0 # will be set, also as global value in premain
    X0=0
    n_a = 3  #Natoms of primitive cell in a direction
@@ -40,7 +39,12 @@ def initial_parameteres():
    trajectory_file_unwrapped = "traj_unwrapped.xyz"
    log_file = "output.dat"
 
-   global D0,r0,alpha,electronvolt_to_joules,epsilon_true
+   # constants
+   # kBTrue = 1.38064852e-23  #m2 kg s-2 K-1
+   # epsilon_True = 1.65e-21 #J
+   # sigma_True = 3.4e-10    #m
+
+   global D0,r0,alpha,electronvolt_to_joules,epsilon_true,sigma_true
    global mass,tau,dt
    if Potential_formula == 'Morse':
       D0 =  0.3429 # ev  ## D in Morse potential ## FOR Copper ##
@@ -61,21 +65,6 @@ def initial_parameteres():
    return None
 
 
-
-# try:
-#     os.remove(trajectory_file)
-#     os.remove(trajectory_file_unwrapped)
-#     os.remove(log_file)
-# except OSError: pass
-# f = open(trajectory_file, "ab")
-# f3 = open(trajectory_file_unwrapped, "ab")
-# f2 = open(log_file, "a")
-#  kB         1
-#  epsilon    1
-#  sigma      1
-#  mass       1
-
-
 @njit(parallel=True)
 def pbc(X):
     X[:,0] -= box_sizes[0]*np.floor(X[:,0]/box_sizes[0])
@@ -83,15 +72,11 @@ def pbc(X):
     X[:,2] -= box_sizes[2]*np.floor(X[:,2]/box_sizes[2])
     return X
 
-# needs refactoring
-# if Potential_formula == 'LJ':
-@njit(parallel=True)
+@njit(parallel=False)
 def force_LJ(X,F):
     F[:,:] = 0.0
-    # this loop can be vectorized --see numpy documentation
     for i in prange(Natoms):
         for j in prange(i+1,Natoms):
-            # vectorize this
             delta_x = X[i,0]-X[j,0]
             delta_y = X[i,1]-X[j,1]
             delta_z = X[i,2]-X[j,2]
@@ -113,14 +98,12 @@ def force_LJ(X,F):
                 F[j, 1] += -fy
                 F[j, 2] += -fz
     return F
-# elif Potential_formula == 'Morse':
-@njit(parallel=True)
+
+@njit(parallel=False)
 def force_Morse(X, F):
     F[:, :] = 0.0
-    # this loop can be vectorized --see numpy documentation
-    for i in prange(Natoms):
-        for j in prange(i + 1, Natoms):
-            # vectorize this
+    for i in range(Natoms):
+        for j in range(i + 1, Natoms):
             delta_x = X[i, 0] - X[j, 0]
             delta_y = X[i, 1] - X[j, 1]
             delta_z = X[i, 2] - X[j, 2]
@@ -251,11 +234,7 @@ def log(f,X,V,step):
     # np.savetxt(f2, log_output,fmt=('%i','%.8f','%.8f','%.8f','%.8f'))
     return None
 
-#Forces = np.zeros((Natoms,3,2)) # why a tensor?
-# KEnergy = np.zeros((Natoms,2))
-# PEnergy = np.zeros((Natoms,2))
 
-### positioning
 def create_atoms(n_a, n_b, n_c):
     unitcell = bulk('Ar', 'fcc', np.power(2,(2./3)),  cubic=True) #,orthorhombic=True)  # ===>  1.122 sigma (from geometry)
     # unitcell = bulk('Ar', 'fcc', 5.4, orthorhombic=True)
@@ -274,7 +253,6 @@ def create_atoms(n_a, n_b, n_c):
     print("The cell is= ", all_atoms.get_cell())
     # visualize.view(all_atoms)
     return all_atoms
-###
 
 @njit(parallel=True)
 def fix_COM_velocity(V):
@@ -290,7 +268,6 @@ def fix_COM_velocity(V):
     V[:, 2] -= ZMassVelocity / Natoms
     return  V
 
-# @njit(parallel=True)
 def pre_main():
     atoms = create_atoms(n_a, n_b, n_c)
     global Natoms
@@ -340,10 +317,7 @@ def main():
     f3 = open(log_file, "a")
 
     dump_xyz(f,f2,X,0)
-    # print(XMassVelocity,YMassVelocity)
 
-
-    # calculate a0 ? acceleration?  => yes
     F = force(X,F)
 
     t_start = time.time()
@@ -359,7 +333,7 @@ def main():
             V = thermostat_velocity_rescaling(V)
             #print('yes')
     t_end = time.time()
-    #print("Time taken: {:.2f} seconds\n".format(t_end-t_start))
+    print("Time taken: {:.2f} seconds\n".format(t_end-t_start))
 
     # close files
     f.close()
@@ -383,10 +357,7 @@ def main():
 # 		self.temp_step = temp_step		
 
 
-# 		#constants
-# 		kBTrue = 1.38064852e-23  #m2 kg s-2 K-1
-# 		epsilon_True = 1.65e-21 #J
-# 		sigma_True = 3.4e-10    #m
+
 
 
 if __name__ == '__main__':
