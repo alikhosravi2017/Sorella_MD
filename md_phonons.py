@@ -1,37 +1,24 @@
-#/usr/bin/env python3
+#!/usr/bin/env python3
 import numpy as np
 import time
-t_start = time.time()
-print("start","Time: 0 seconds\n")
-# from mpl_toolkits.mplot3d import Axes3D
 import matplotlib.pyplot as plt
 from numba import njit,prange
-
-
 plt.style.use('ggplot')
 
 # parameters
-folder_path='with_lammps/'
-save_flag= '_10K_1fs_4_4_4'
-trajectory_file = "traj_lammps_10K_1fs.xyz"
-# trajectory_file = "traj_lammps_10K_1fs_4_4_4.xyz"
-# folder_path=''
-# save_flag= ''
-# trajectory_file = "traj_unwrapped.xyz"
+folder_path='./'
+save_flag= ''
+trajectory_file = "traj_unwrapped.xyz"
+# folder_path='with_lammps/'
+# save_flag= '_10K_1fs_4_4_4'
+# trajectory_file = "traj_lammps_10K_1fs.xyz"
+
 
 sigma_true = 3.4e-10  # m ## This is necessarily to get rid of lj units
 kB_true = 1.38064852e-23  #m2 kg s-2 K-1
 T = 10
 mass = 6.6335209e-26  #kg
-# notation
-# l,l' -> refers to the unit cell in the supercell
-# k,k' -> runs over all Natoms
-# \alpha, \beta -> x,y,z
 
-# cell = np.ones((3,3))
-# number of repeats
-
-# origin of l-th unit cell relative to l=[0,0,0]
 
 
 @njit(parallel=True,fastmath=True)
@@ -42,7 +29,6 @@ def mean(arr):
 			summation[j,:] += arr[frame,j,:]
 		summation[j,:] /= arr.shape[0]
 	return summation
-
 
 
 @njit()
@@ -85,7 +71,8 @@ def plot_disp(bands):
 
 
 @njit(parallel=True)
-def exponential_term(traj_0,pt):
+def exponential_term(traj,pt):
+	traj_0 = mean(traj)
 	exponentials = np.zeros((nuq, Natoms), dtype=np.complex128)
 	for ii in prange(nuq):
 		exponentials[ii] = np.exp(-1j * np.sum(pt[ii] * traj_0, axis=1))
@@ -114,7 +101,7 @@ def FT(POS,exponentials,pt):
 
 
 @njit(parallel=True)
-def greens_func(traj,traj_for_FT,pt):
+def greens_func(traj,pt):
 	"""	Takes the Fourier transform of the absolute positions for a given vector.
 	Averages all frames and calculates the FT Green's function coeffs at each 
 	wave vector q."""
@@ -123,7 +110,7 @@ def greens_func(traj,traj_for_FT,pt):
 	G_ft = np.zeros((nuq,3,3),dtype=np.complex128) # ka, k'b
 
 	# Calculate exponential term necessarily for FT calculation
-	exponentials = exponential_term(traj_for_FT, pt)
+	exponentials = exponential_term(traj, pt)
 	# For first term
 	for fram in range(Nframes):
 		Rq      =  FT(traj[fram],exponentials,pt)
@@ -225,6 +212,8 @@ def ASR(phi,pgp,nucell):
 
 
 def main():
+	t_start = time.time()
+
 	global Natoms
 	global Natoms_root_rev
 	global Nframes
@@ -232,9 +221,9 @@ def main():
 
 
 	load_previous_calculation = False
+	load_loaded_traj=False
 	# load_previous_calculation = True
 	# load_loaded_traj=True
-	load_loaded_traj=False
 
 	# set some initial values
 	a = np.power(2,(2./3)) # cubic constant in sigma units
@@ -270,14 +259,11 @@ def main():
 	# !!! end new traj system
 
 	Natoms_root_rev = 1.0/np.sqrt(Natoms)
-	# traj_for_FT = traj[0, :, 1:]
 	traj =  traj[int(traj.shape[0]*skip_portion/100):,:,:]
-	# traj_for_FT = np.mean(traj, axis=0)
-	traj_for_FT = mean(traj)
 	Nframes = traj.shape[0]
 
 	# MAIN engine
-	G_ft = greens_func(traj, traj_for_FT,pt)     # Calculates green function
+	G_ft = greens_func(traj,pt)     # Calculates green function
 
 	phi_ft = force_constants(G_ft)   # Calculates force matrix in reciprocal space
 	phi_ft=ASR(phi_ft,pgp,nucell=1)            # Apply ASR
@@ -287,6 +273,10 @@ def main():
 	# Save everything, if you wanted to change a little thing in plots
 	np.save(folder_path+'temp_pt'+save_flag, pt)
 	np.save(folder_path+'temp_freqs'+save_flag,freqs)
+
+
+	t_end = time.time()
+	print("Time taken: {} seconds\n".format(t_end-t_start))
 
 	## project the path to 2D plot
 	pt_diff =np.linalg.norm(np.diff(pt,axis=0),axis=1)
