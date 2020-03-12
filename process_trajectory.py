@@ -2,8 +2,10 @@
 import time
 import numpy as np
 
-folder = './with_lammps/'
-fname ='traj_lammps_10K_1fs.xyz'
+folder='./'
+fname='traj_unwrapped.xyz'
+#folder = './with_lammps/'
+#fname ='traj_lammps_10K_1fs.xyz'
 fpath = folder+fname
 
 def read_xyz(pos=fpath):
