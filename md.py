@@ -24,7 +24,7 @@ def initial_parameteres():
     box_sizes = [0,0,0] # from 0 to L in each direction. will be set, also as global value in premain
     box_half_sizes = 0 # will be set, also as global value in premain
     Nsteps = 10**5
-    cutoff = 300   #cut off
+    cutoff = 3   #cut off
     dump_step = 100
     log_step = 10
     velocity_zeroing_step =100
